@@ -38,10 +38,10 @@ function _flr_fungrad(x::Array{Float64,2}, cl::Float64, cr::Float64)
         ft .= u * v'          # fitted values
         rs .= x .- ft         # residuals
 
-	# Penalty terms
-	ssu = sum(abs2, u)
+        # Penalty terms
+        ssu = sum(abs2, u)
         pl = sum(abs2, wl*u) / ssu
-	ssv = sum(abs2, v)
+        ssv = sum(abs2, v)
         pr = sum(abs2, wr*v) / ssv
 
         return sum(abs2, rs) + cl*pl + cr*pr

@@ -2,54 +2,85 @@ using JuMP
 using Tulip
 using Random
 using Statistics
+using NearestNeighbors
+using LightGraphs
+using UnicodePlots
+using MathOptInterface
 
 # Implement the nonparametric quantile regression approach described here:
 # https://arxiv.org/abs/2012.01758
 
-# Find the positions of the k nearest neighbors to each row of x, in
-# the L2 norm.
-function _nn1(x::Array{Float64,2}, k::Int)::Array{Int,2}
-
-    n, p = size(x)
-    d = zeros(n)
-    nn = zeros(Int, n, k)
-
-    for i in 1:n
-        for j in 1:n
-            d[j] = 0
-            for l in 1:p
-                d[j] = d[j] + (x[i, l] - x[j, l])^2
-            end
-        end
-	d[i] = Inf
-        nn[i, :] = sortperm(d)[1:k]
-    end
-
-    return nn
-
-end
-
 # Representation of a fitted model
 mutable struct Qreg
+
+    # The outcome variable
+    y::Array{Float64,1}
+
+    # The covariates used to define the nearest neighbors
     x::Array{Float64,2}
+
+    # Indices of the nearest neighbors
     nn::Array{Int,2}
+
+    # A tree for finding neighbors
+    kt::KDTree
+
+    # The optimization model
+    model::JuMP.Model
+
+    # The fitted values from the most recent call to fit
+    fit::Array{Float64,1}
+
+    # The probability point for the most recent fit
     p::Float64
-    fit::Array{Float64}
+
+    # Retain these references from the optimization model
+    rpos::Array{JuMP.VariableRef,1}
+    rneg::Array{JuMP.VariableRef,1}
+    dcap::Array{JuMP.VariableRef,2}
+    rfit::Array{JuMP.VariableRef,1}
+
 end
+
+# Returns the degrees of freedom of the fitted model, which is the
+# number of connected components of the graph defined by all edges
+# of the covariate graph that are fused in the regression fit.
+function degf(qr::Qreg; e=1e-2)::Int
+
+    nn = qr.nn
+    fv = qr.fit
+    g = SimpleGraph(size(nn, 1))
+
+    for i in 1:size(nn,1)
+        for j in 1:size(nn,2)
+            if abs(fv[i] - fv[nn[i,j]]) < e
+                add_edge!(g, i, j)
+            end
+        end
+    end
+
+    return length(connected_components(g))
+
+end
+
+# Returns the BIC for the given fitted model.
+function bic(qr::Qreg)::Float64
+    d = degf(qr)
+    p = qr.p
+    resid = qr.y - qr.fit
+    pos = sum(x->clamp(x, 0, Inf), resid)
+    neg = -sum(x->clamp(x, -Inf, 0), resid)
+    check = p*pos + (1-p)*neg
+    sig = (1 - abs(1 - 2*p)) / 2
+    n = length(qr.y)
+    return 2*check/sig + d * log(n)
+end
+
 
 # Predict the quantile at the point z using k nearest neighbors.
 function predict(qr::Qreg, z::Array{Float64}; k=5)::Float64
 
-    nn = zeros(Int, k)
-    x = qr.x
-    n, r = size(x)
-    d = zeros(n)
-    for i in 1:n
-        for j in 1:r
-            d[i] = d[i] + (x[i,j] - z[j])^2
-        end
-    end
-    ii = sortperm(d)[1:k]
+    ii = qr.kt.knn(z, k)
     return mean(qr.fit[ii])
 
 end
@@ -69,7 +100,7 @@ function predict_smooth(qr::Qreg, z::Array{Float64}, bw::Array{Float64})::Float6
             e = e + (x[i,j] - z[j]) / bw[j]
         end
         w = exp(-e*e / 2)
-	xr[2:end] = x[i, :] - z
+	    xr[2:end] = x[i, :] - z
         xtx .= xtx + w * xr * xr'
         xty .= xty + w * f[i] * xr
     end
@@ -79,14 +110,18 @@ function predict_smooth(qr::Qreg, z::Array{Float64}, bw::Array{Float64})::Float6
 
 end
 
-
-# Estimate the p'th quantiles for the population represented by data
-# y, x.  lam is a penalty parameter controlling the smoothness of the
-# fit, k is the number of nearest neighbors used for regularization.
-function qreg_nn(y::Array{Float64}, x::Array{Float64,2}, p, lam; k=5)::Qreg
+# Construct a structure that can be used to perform quantile regression
+# of y on x.  k is the number of nearest neighbors used for regularization.
+function qreg_nn(y::Array{Float64}, x::Array{Float64,2}; k::Int=5)::Qreg
 
     n = length(y)
-    nn = _nn1(x, k)
+
+    # Build the nearest neighbor tree, exclude each point from its own
+    # neighborhood.
+    kt = KDTree(x')
+    nx, _ = knn(kt, x', k+1, true)
+    nn = hcat(nx...)'
+    nn = nn[:, 2:end]
 
     model = Model(Tulip.Optimizer)
 
@@ -95,29 +130,43 @@ function qreg_nn(y::Array{Float64}, x::Array{Float64,2}, p, lam; k=5)::Qreg
 
     # The residuals y - rfit are decomposed into their positive
     # and negative parts.
-    @variable(model, rpos[1:n])
-    @variable(model, rneg[1:n])
+    rpos = @variable(model, rpos[1:n])
+    rneg = @variable(model, rneg[1:n])
 
     # The distance between the fitted value of each point
     # and its nearest neighbor is bounded by dcap.
-    @variable(model, dcap[1:n, 1:k])
+    dcap = @variable(model, dcap[1:n, 1:k])
 
     @constraint(model, rpos - rneg .== y - rfit)
     @constraint(model, rpos .>= 0)
     @constraint(model, rneg .>= 0)
     @constraint(model, dcap .>= 0)
     for j in 1:k
-        @constraint(model, rfit - rfit[nn[:,j]] .<= dcap[:, j])
-        @constraint(model, rfit[nn[:,j]] - rfit .<= dcap[:, j])
+        @constraint(model, rfit - rfit[nn[:, j]] .<= dcap[:, j])
+        @constraint(model, rfit[nn[:, j]] - rfit .<= dcap[:, j])
     end
-    @objective(model, Min, sum(p*rpos + (1-p)*rneg) + lam*sum(dcap))
-    optimize!(model)
-    println(termination_status(model))
-    fv = value.(rfit)
 
-    return Qreg(x, nn, p, fv)
+    return Qreg(y, x, nn, kt, model, Array{Float64,1}(), -1, rpos, rneg, dcap, rfit)
 
 end
+
+
+# Estimate the p'th quantiles for the population represented by the data
+# in qr. lam is a penalty parameter controlling the smoothness of the
+# fit.
+function fit(qr::Qreg, p::Float64, lam::Float64)::Array{Float64,1}
+
+    @objective(qr.model, Min, sum(p*qr.rpos + (1-p)*qr.rneg) + lam*sum(qr.dcap))
+
+    optimize!(qr.model)
+    if termination_status(qr.model) != MathOptInterface.OPTIMAL
+        error("fit did not converge")
+    end
+    qr.fit = value.(qr.rfit)
+    return qr.fit
+
+end
+
 
 function check1()
 
@@ -126,14 +175,14 @@ function check1()
     x = randn(n, 2)
     y = x[:, 1] + randn(n)
 
-    qr1 = qreg_nn(y, x, 0.25, 0.1)
-    qr2 = qreg_nn(y, x, 0.5, 0.1)
-    qr3 = qreg_nn(y, x, 0.75, 0.1)
+    qr1 = qreg_nn(y, x)
+    qr2 = qreg_nn(y, x)
+    qr3 = qreg_nn(y, x)
 
     yq = zeros(n, 3)
-    yq[:, 1] = qr1.fit
-    yq[:, 2] = qr2.fit
-    yq[:, 3] = qr3.fit
+    yq[:, 1] = fit(qr1, 0.25, 0.1)
+    yq[:, 2] = fit(qr2, 0.5, 0.1)
+    yq[:, 3] = fit(qr3, 0.75, 0.1)
 
     ax = [-0.67, 0, 0.67] # True intercepts
     for j in 1:3
@@ -148,5 +197,26 @@ function check1()
     @assert abs(predict_smooth(qr1, [0., 0.], bw) - ax[1]) < 0.1
     @assert abs(predict_smooth(qr2, [0., 0.], bw) - ax[2]) < 0.1
     @assert abs(predict_smooth(qr3, [0., 0.], bw) - ax[3]) < 0.1
+
+end
+
+function check2()
+
+    Random.seed!(342)
+    n = 1000
+    x = randn(n, 2)
+    y = x[:, 1].^2 + randn(n)
+
+    qr = qreg_nn(y, x)
+    p = 0.5
+
+    lam = 0.1:0.05:1
+    b = zeros(length(lam))
+    for (i,la) in enumerate(lam)
+        _ = fit(qr, p, la)
+        b[i] = bic(qr)
+    end
+
+    lineplot(lam, b)
 
 end
