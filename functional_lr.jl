@@ -49,7 +49,7 @@ function _flr_fungrad(x::Array{Float64,2}, cl::Float64, cr::Float64)
 
     # The gradient of f.  If project is false, the gradient is
     # calculated as if the parameters are free in R^{p+q}, if project
-    # is true, the gradient is projected to S^p x S^q, which is the
+    # is true, the gradient is projected to S^p x R^q, which is the
     # natural domain for the parameters.  The gradient is stored in G.
     g! = function(G, z; project=true)
         u = @view(z[1:p])     # left-side parameters
@@ -69,7 +69,6 @@ function _flr_fungrad(x::Array{Float64,2}, cl::Float64, cr::Float64)
 
         if project
             G[1:p] .= G[1:p] .- dot(G[1:p], u) .* u ./ dot(u, u)
-            G[p+1:end] .= G[p+1:end] .- dot(G[p+1:end], v) .* v ./ dot(v, v)
         end
     end
 
@@ -80,11 +79,12 @@ end
 # Fit a functional low-rank model to the matrix x.
 function fit_flr(x, cl, cr)
 
+    cl, cr = convert(Float64, cl), convert(Float64, cr)
     p, q = size(x)
 
     # Starting values
     u, s, v = svd(x)
-    pa = vcat(u[:, 1],  v[:, 1])
+    pa = sqrt(s[1]) .* vcat(u[:, 1],  v[:, 1])
 
     f, g! = _flr_fungrad(x, cl, cr)
 
@@ -134,8 +134,8 @@ function check_fit(;cl=1.0, cr=1.0, p=10, q=5, e=1e-5)
     # With no penalization, the SVD gives the solution
     u0, s0, v0 = svd(x)
     u1, v1 = fit_flr(x, 0, 0)
-    e = maximum(abs.(u1*v1' - u0[:, 1]*v0[:, 1]'))
-    @assert e < 1e-10
+    e = maximum(abs.(u1*v1' - s0[1]*u0[:, 1]*v0[:, 1]'))
+    @assert e < 1e-9
 
     # Increasing levels of regularization
     for cl in [0.1, 1, 10, 100, 1000, 10000]
@@ -146,5 +146,5 @@ function check_fit(;cl=1.0, cr=1.0, p=10, q=5, e=1e-5)
 
 end
 
-#check_grad()
-#check_fit()
+check_grad()
+check_fit()
