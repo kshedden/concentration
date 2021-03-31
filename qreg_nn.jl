@@ -54,7 +54,7 @@ function degf(qr::Qreg; e=1e-2)::Int
     for i in 1:size(nn,1)
         for j in 1:size(nn,2)
             if abs(fv[i] - fv[nn[i,j]]) < e
-                add_edge!(g, i, j)
+                add_edge!(g, i, nn[i,j])
             end
         end
     end
