@@ -64,7 +64,7 @@ function degf(qr::Qreg; e=1e-2)::Int
 end
 
 # Returns the BIC for the given fitted model.
-function bic(qr::Qreg)::Float64
+function bic(qr::Qreg)::Tuple{Float64,Int}
     d = degf(qr)
     p = qr.p
     resid = qr.y - qr.fit
@@ -73,7 +73,7 @@ function bic(qr::Qreg)::Float64
     check = p*pos + (1-p)*neg
     sig = (1 - abs(1 - 2*p)) / 2
     n = length(qr.y)
-    return 2*check/sig + d * log(n)
+    return tuple(2*check/sig + d * log(n), d)
 end
 
 
@@ -168,6 +168,34 @@ function fit(qr::Qreg, p::Float64, lam::Float64)::Array{Float64,1}
 end
 
 
+# Search for a tuning parameter based on BIC.  Starting from
+# lambda=0.1, increase the tuning parameter value sequentially
+# by a factor of 'fac'.  If stop==true, as soon as the current
+# BIC is greater than the previous BIC, stop and return the
+# BIC path.  If stop==false, obtain the path until the degrees
+# of freedom is less than 2.  The path is returned as an array
+# of triples containing the tuning parameter value, the BIC
+# value, and the degrees of freedom.
+function bic_search(qr::Qreg, p::Float64; fac=1.2, stop=true)
+
+    pa = []
+
+    lam = 0.1
+    while true
+        _ = fit(qr, p, lam)
+        b, d = bic(qr)
+        push!(pa, [lam, b, d])
+        if (d < 2) || (length(pa) > 1 && stop && b > pa[end-1][2])
+            break
+        end
+        lam = lam * fac
+    end
+
+    return pa
+
+end
+
+
 function check1()
 
     Random.seed!(342)
@@ -220,3 +248,29 @@ function check2()
     lineplot(lam, b)
 
 end
+
+function check3()
+
+    Random.seed!(342)
+    nrep = 20
+    n = 1000
+    p = 0.5
+    for j in 1:nrep
+
+        x = randn(n, 2)
+        y = x[:, 1].^2 + randn(n)
+
+        qr = qreg_nn(y, x)
+
+        for stop in [false, true]
+            pa = bic_search(qr, p, stop=stop)
+            x = [z[2] for z in pa]
+            x = x .- minimum(x)
+            plt = lineplot(x[3:end])
+            println(plt)
+        end
+
+    end
+
+end
+
