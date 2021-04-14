@@ -169,29 +169,31 @@ end
 
 
 # Search for a tuning parameter based on BIC.  Starting from
-# lambda=0.1, increase the tuning parameter value sequentially
-# by a factor of 'fac'.  If stop==true, as soon as the current
-# BIC is greater than the previous BIC, stop and return the
-# BIC path.  If stop==false, obtain the path until the degrees
-# of freedom is less than 2.  The path is returned as an array
+# lambda=0.1, increase the tuning parameter sequentially
+# by a factor of 'fac'.  The iterations stop when the current
+# BIC is greater than the previous BIC, or when the degrees of
+# freedom is less than or equal to 'dof_min', or when the value of
+# lambda is greater than 'lam_max'. The path is returned as an array
 # of triples containing the tuning parameter value, the BIC
 # value, and the degrees of freedom.
-function bic_search(qr::Qreg, p::Float64; fac=1.2, stop=true)
+function bic_search(qr::Qreg, p::Float64; fac=1.2, lam_max=1e6, dof_min=2)
 
     pa = []
 
     lam = 0.1
-    while true
+    while lam < lam_max
         _ = fit(qr, p, lam)
         b, d = bic(qr)
         push!(pa, [lam, b, d])
-        if (d < 2) || (length(pa) > 1 && stop && b > pa[end-1][2])
+        if (d <= dof_min) || (length(pa) > 1 && b > pa[end-1][2])
             break
         end
         lam = lam * fac
     end
 
-    return pa
+    la = minimum([x[2] for x in pa])
+
+    return tuple(la, pa)
 
 end
 
@@ -256,21 +258,20 @@ function check3()
     n = 1000
     p = 0.5
     for j in 1:nrep
+        for k in [1, 2]
 
-        x = randn(n, 2)
-        y = x[:, 1].^2 + randn(n)
+            x = randn(n, k)
+            y = x[:, 1].^2 + randn(n)
 
-        qr = qreg_nn(y, x)
+            qr = qreg_nn(y, x)
 
-        for stop in [false, true]
-            pa = bic_search(qr, p, stop=stop)
+            la, pa = bic_search(qr, p, lam_max=1e6)
             x = [z[2] for z in pa]
             x = x .- minimum(x)
             plt = lineplot(x[3:end])
             println(plt)
-        end
 
+        end
     end
 
 end
-
