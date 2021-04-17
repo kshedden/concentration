@@ -80,7 +80,7 @@ end
 # Predict the quantile at the point z using k nearest neighbors.
 function predict(qr::Qreg, z::Array{Float64}; k=5)::Float64
 
-    ii = qr.kt.knn(z, k)
+    ii, _ = knn(qr.kt, z, k)
     return mean(qr.fit[ii])
 
 end

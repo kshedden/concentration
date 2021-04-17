@@ -146,5 +146,5 @@ function check_fit(;cl=1.0, cr=1.0, p=10, q=5, e=1e-5)
 
 end
 
-check_grad()
-check_fit()
+#check_grad()
+#check_fit()
