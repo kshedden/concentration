@@ -16,7 +16,7 @@ mutable struct vs
     # The target value for the variable
     target::Float64
 
-    # Only consider observations within the caliper of the target
+    # Only consider observations within the caliper relative to the target
     caliper::Float64
 
 end
@@ -53,20 +53,23 @@ function restrict(dx::AbstractDataFrame, vl::Array{vs,1})::AbstractDataFrame
 
 end
 
-
+# Generate a dataset for two-point longitudinal quantile analysis.  Conditional quantiles
+# of SBP at age2 are calculated given the values of the variables in vl1 at age1 and
+# the values of the variables in vl2 at age2.
 function gendat(sex::String, age1::Float64, age2::Float64, vl1::Array{vs,1}, vl2::Array{vs,1})
 
     # Always stratify by sex.
     dx = filter(r->r.Sex==sex, df)
 
     # Get all variable names that we need, except for SBP.
-    # The variables in na must not be missing.
     na = [:ID, :Age_Yrs]
     push!(na, [x.name for x in vl1]...)
     push!(na, [x.name for x in vl2]...)
     na = unique(na)
 
-    # Eliminate non-usable data
+    # Drop rows where any of the core variables are missing.
+    # SBP may be missing in childhood, all other variables
+    # must be observed.
     dx = dx[:, vcat(na, :SBP_MEAN)]
     dx = dx[completecases(dx[:, na]), :]
 
@@ -119,7 +122,7 @@ function gendat(sex::String, age1::Float64, age2::Float64, vl1::Array{vs,1}, vl2
         dr[:, Symbol(@sprintf("%s1", c.name))] = vd1[j]
     end
 
-    # Add control variables measured with SBP
+    # Add control variables measured with SBP and adult body size
     for (j, c) in enumerate(vl2)
         dr[:, Symbol(@sprintf("%s2", c.name))] = vd2[j]
     end
@@ -127,7 +130,9 @@ function gendat(sex::String, age1::Float64, age2::Float64, vl1::Array{vs,1}, vl2
     return dr
 end
 
-# Build regression matrices for quantile regression.
+# Build regression matrices for quantile regression.  Standardize
+# all variables and return the mean/sd used for standardization
+# so we can map between the original and standardized scales.
 function regmat(dr::AbstractDataFrame, vl1::Array{vs,1}, vl2::Array{vs,1})
 
     xna = [:Age1, :Age2]
@@ -153,13 +158,36 @@ function regmat(dr::AbstractDataFrame, vl1::Array{vs,1}, vl2::Array{vs,1})
 
 end
 
+
+# Estimate marginal quantiles by age for 'trait'.
+function mqa(trait, sex, p; la=1.0, bw=1.0)
+    dx = df[:, [:ID, :Sex, :Age_Yrs, trait]]
+    dx = dx[completecases(dx), :]
+    dx = filter(r->r.Sex==sex, dx)
+
+    y = Array{Float64,1}(dx[:, trait])
+    x = Array{Float64,1}(dx[:, :Age_Yrs])[:, :]
+    qr = qreg_nn(y, x)
+    _ = fit(qr, p, la)
+
+    return a->predict_smooth(qr, [a], [1.0])
+
+end
+
+sex = "Male"
+age1 = 3.
+age2 = 20.
+
+hq = mqa(:Ht_Ave_Use, sex, 0.5)
+bq = mqa(:BMI, sex, 0.5)
+
 # Control childhood body-size
 vl1 = [vs(:Ht_Ave_Use, 98, Inf)]
 
 # Control adult body-size
-vl2 = [vs(:Ht_Ave_Use, 158, 10), vs(:BMI, 20, 2)]
+vl2 = [vs(:Ht_Ave_Use, 158, 10), vs(:BMI, 22, 2)]
 
-dr = gendat("Female", 5.0, 20.0, vl1, vl2)
+dr = gendat(sex, age1, age2, vl1, vl2)
 
 yv, xm, xmn, xsd, xna = regmat(dr, vl1, vl2)
 
@@ -180,7 +208,7 @@ xg = collect(range(-2, 2, length=m))
 v = zeros(size(xm, 2))
 
 for j in 1:m
-    _ = fit(qr, pg[j], 0.2)
+    _ = fit(qr, pg[j], 0.1)
     for i in 1:m
         v[3] = xg[i]
         xr[i, j] = predict_smooth(qr, v, bw)
@@ -189,7 +217,7 @@ end
 
 xr0 = broadcast(-, xr, xr[div(m, 2), :]')
 
-u, v = fit_flr(xr0, 10., 10.)
+u, v = fit_flr(xr0, 10., 50.)
 
 println(lineplot(xg, u))
 println(lineplot(pg, v))
