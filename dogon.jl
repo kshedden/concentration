@@ -160,7 +160,8 @@ end
 
 
 # Estimate marginal quantiles by age for 'trait'.
-function mqa(trait, sex, p; la=1.0, bw=1.0)
+function mqa(trait::Symbol, sex::String, p::Float64; la::Float64=1.0, bw::Float64=1.0)
+
     dx = df[:, [:ID, :Sex, :Age_Yrs, trait]]
     dx = dx[completecases(dx), :]
     dx = filter(r->r.Sex==sex, dx)
@@ -170,25 +171,35 @@ function mqa(trait, sex, p; la=1.0, bw=1.0)
     qr = qreg_nn(y, x)
     _ = fit(qr, p, la)
 
-    return a->predict_smooth(qr, [a], [1.0])
+    return a->predict_smooth(qr, [a], [bw])
 
 end
 
-sex = "Male"
-age1 = 3.
+# Analyze one sex, at specific childhood and adult ages
+sex = "Female"
+age1 = 5.
 age2 = 20.
 
+# childhood body size variable (primary exposure)
+# Possibilities: Ht_Ave_Use, WT, HAZ, WAZ
+#cbs = :Ht_Ave_Use
+cbs = :HAZ
+
+# Use these to determine where to control the adult body size values,
+# and to select cases that are informative
+cq = mqa(cbs, sex, 0.5)
 hq = mqa(:Ht_Ave_Use, sex, 0.5)
 bq = mqa(:BMI, sex, 0.5)
 
 # Control childhood body-size
-vl1 = [vs(:Ht_Ave_Use, 98, Inf)]
+vl1 = [vs(cbs, cq(age1), Inf)]
 
 # Control adult body-size
-vl2 = [vs(:Ht_Ave_Use, 158, 10), vs(:BMI, 22, 2)]
+vl2 = [vs(:Ht_Ave_Use, hq(age2), 10), vs(:BMI, bq(age2), 2)]
 
 dr = gendat(sex, age1, age2, vl1, vl2)
 
+# The childhood body size is in column 3 of xm.
 yv, xm, xmn, xsd, xna = regmat(dr, vl1, vl2)
 
 qr = qreg_nn(yv, xm)
@@ -201,14 +212,16 @@ xr = zeros(m, m)
 # Probability points for SBP
 pg = collect(range(1/m, 1-1/m, length=m))
 
-# Z-score points for childhood height
-xg = collect(range(-2, 2, length=m))
+# Z-score points for childhood body size
+xg = [mqa(cbs, sex, p)(age1) for p in pg]
+g = x -> (x - xmn[3]) / xsd[3]
+xg = [g(x) for x in xg]
 
 # Covariate vector
 v = zeros(size(xm, 2))
 
 for j in 1:m
-    _ = fit(qr, pg[j], 0.1)
+    _ = fit(qr, pg[j], 0.1) # important tuning parameter here
     for i in 1:m
         v[3] = xg[i]
         xr[i, j] = predict_smooth(qr, v, bw)
