@@ -130,10 +130,11 @@ function gendat(sex::String, age1::Float64, age2::Float64, vl1::Array{vs,1}, vl2
     return dr
 end
 
-# Build regression matrices for quantile regression.  Standardize
-# all variables and return the mean/sd used for standardization
-# so we can map between the original and standardized scales.
-function regmat(dr::AbstractDataFrame, vl1::Array{vs,1}, vl2::Array{vs,1})
+# Build regression matrices for quantile regression with dependent
+# variable 'dvar'.  Standardize all variables and return the mean/sd
+# used for standardization so we can map between the original and
+# standardized scales.
+function regmat(dvar::Symbol, dr::AbstractDataFrame, vl1::Array{vs,1}, vl2::Array{vs,1})
 
     xna = [:Age1, :Age2]
     push!(xna, [Symbol(@sprintf("%s1", x.name)) for x in vl1]...)
@@ -152,7 +153,7 @@ function regmat(dr::AbstractDataFrame, vl1::Array{vs,1}, vl2::Array{vs,1})
         xm[:, j] = (xm[:, j] .- m) ./ s
     end
 
-    yv = dr[:, :SBP]
+    yv = dr[:, dvar]
 
     return (yv, xm, xmn, xsd, xna)
 
@@ -200,7 +201,7 @@ vl2 = [vs(:Ht_Ave_Use, hq(age2), 10), vs(:BMI, bq(age2), 2)]
 dr = gendat(sex, age1, age2, vl1, vl2)
 
 # The childhood body size is in column 3 of xm.
-yv, xm, xmn, xsd, xna = regmat(dr, vl1, vl2)
+yv, xm, xmn, xsd, xna = regmat(:SBP, dr, vl1, vl2)
 
 qr = qreg_nn(yv, xm)
 
