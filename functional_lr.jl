@@ -12,6 +12,7 @@ end
 
 # Split the parameter vector for the multi-predictor model into components.
 function _split(z)
+    p = div(length(z), 6)
     ux = @view(z[1:p])
     vx = @view(z[p+1:2*p])
     um1 = @view(z[2*p+1:3*p])
@@ -22,7 +23,7 @@ function _split(z)
 end
 
 
-function _flr_fungrad_multi(x::Array{Float64,5}, cu::Array{Float64,1}, cv::Array{Float64,1})
+function _flr_fungrad_multi(x::Array{Float64,4}, cu::Array{Float64,1}, cv::Array{Float64,1})
 
     p = size(x, 1)
 
@@ -98,18 +99,16 @@ function _flr_fungrad_multi(x::Array{Float64,5}, cu::Array{Float64,1}, cv::Array
         h(um2, vm2, um2g, vm2g, cu[3], cv[3])
 
         # Loss gradient
-        function _getfit(ux, vx, um1, vm1, um2, vm2)
-            for i1 in 1:p
-                for i2 in 1:p
-                    for i3 in 1:p
-                        for i4 in 1:p
-                            uxg[i1] = uxg[i1] - 2 * rs[i1, i2, i3, i4] * vx[i4]
-                            vxg[i4] = vxg[i4] - 2 * rs[i1, i2, i3, i4] * ux[i1]
-                            um1g[i2] = um1g[i2] - 2 * rs[i1, i2, i3, i4] * vm1[i4]
-                            vm1g[i4] = vm1g[i4] - 2 * rs[i1, i2, i3, i4] * um1[i2]
-                            um2g[i3] = um2g[i3] - 2 * rs[i1, i2, i3, i4] * vm2[i4]
-                            vm2g[i4] = vm2g[i4] - 2 * rs[i1, i2, i3, i4] * um2[i3]
-                        end
+        for i1 in 1:p
+            for i2 in 1:p
+                for i3 in 1:p
+                    for i4 in 1:p
+                        uxg[i1] = uxg[i1] - 2 * rs[i1, i2, i3, i4] * vx[i4]
+                        vxg[i4] = vxg[i4] - 2 * rs[i1, i2, i3, i4] * ux[i1]
+                        um1g[i2] = um1g[i2] - 2 * rs[i1, i2, i3, i4] * vm1[i4]
+                        vm1g[i4] = vm1g[i4] - 2 * rs[i1, i2, i3, i4] * um1[i2]
+                        um2g[i3] = um2g[i3] - 2 * rs[i1, i2, i3, i4] * vm2[i4]
+                        vm2g[i4] = vm2g[i4] - 2 * rs[i1, i2, i3, i4] * um2[i3]
                     end
                 end
             end
@@ -277,6 +276,63 @@ function check_grad(;cl=1.0, cr=1.0, p=10, q=5, e=1e-5)
 
 end
 
+
+function check_grad_multi(;p=10, e=1e-5)
+
+    ux = range(1, stop=5, length=p)
+    vx = range(-2, stop=2, length=p)
+    um1 = range(1, stop=5, length=p)
+    vm1 = range(-2, stop=2, length=p).^2
+    um2 = range(1, stop=5, length=p)
+    vm2 = range(1, stop=2, length=p)
+
+    x = zeros(p, p, p, p)
+
+    for i1 in 1:p
+        for i2 in 1:p
+            for i3 in 1:p
+                for i4 in 1:p
+                    x[i1, i2, i3, i4] = ux[i1]*vx[i4] + um1[i2]*vm1[i4] + um2[i3]*vm2[i4]
+                end
+            end
+        end
+    end
+
+    x = x + randn(p, p, p, p)
+
+    cu = [10., 10., 10.]
+    cv = [10., 10., 10.]
+
+    f, g! = _flr_fungrad_multi(x, cu, cv)
+
+    # Test the gradient at this point
+    ux0 = ux + randn(p)
+    vx0 = vx + randn(p)
+    um10 = um1 + randn(p)
+    vm10 = vm1 + randn(p)
+    um20 = um2 + randn(p)
+    vm20 = vm2 + randn(p)
+
+    # Get the numerical gradient
+    pa = vcat(ux0, vx0, um10, vm10, um20, vm20)
+    f0 = f(pa)
+    ng = zeros(6*p)
+    for i in 1:6*p
+        pa[i] = pa[i] + e
+        f1 = f(pa)
+        ng[i] = (f1 - f0) / e
+        pa[i] = pa[i] - e
+    end
+
+    # Get the analytic gradient
+    ag = zeros(6*p)
+    g!(ag, pa, project=false)
+
+    d = maximum(abs.((ag - ng) ./ abs.(ng)))
+    @assert d < 1e-3
+
+end
+
 function check_fit(;cl=1.0, cr=1.0, p=10, q=5, e=1e-5)
 
     u = range(1, stop=5, length=p)
@@ -300,3 +356,4 @@ end
 
 #check_grad()
 #check_fit()
+check_grad_multi()
