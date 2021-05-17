@@ -10,6 +10,158 @@ function _fw(p)
     return a
 end
 
+# Split the parameter vector for the multi-predictor model into components.
+function _split(z)
+    ux = @view(z[1:p])
+    vx = @view(z[p+1:2*p])
+    um1 = @view(z[2*p+1:3*p])
+    vm1 = @view(z[3*p+1:4*p])
+    um2 = @view(z[4*p+1:5*p])
+    vm2 = @view(z[5*p+1:6*p])
+    return tuple(ux, vx, um1, vm1, um2, vm2)
+end
+
+
+function _flr_fungrad_multi(x::Array{Float64,5}, cu::Array{Float64,1}, cv::Array{Float64,1})
+
+    p = size(x, 1)
+
+    # Storage
+    ft = zeros(p, p, p, p)
+    rs = zeros(p, p, p, p)
+
+    # The smoothing penalty matrix.
+    w = _fw(p)
+    w2 = w' * w
+
+    # Fitted values
+    function _getfit(ux, vx, um1, vm1, um2, vm2)
+        for i1 in 1:p
+            for i2 in 1:p
+                for i3 in 1:p
+                    for i4 in 1:p
+                        ft[i1, i2, i3, i4] = ux[i1]*vx[i4] + um1[i2]*vm1[i4] + um2[i3]*vm2[i4]
+                    end
+                end
+            end
+        end
+    end
+
+    f = function(z::Array{Float64,1})
+
+        ux, vx, um1, vm1, um2, vm2 = _split(z)
+
+        _getfit(ux, vx, um1, vm1, um2, vm2)
+
+        rs .= x .- ft # residuals
+
+        rv = sum(abs2, rs)
+
+        # Penalty terms
+        rv = rv + cu[1] * sum(abs2, w*ux) / sum(abs2, ux)
+        rv = rv + cu[2] * sum(abs2, w*um1) / sum(abs2, um1)
+        rv = rv + cu[3] * sum(abs2, w*um2) / sum(abs2, um2)
+        rv = rv + cv[1] * sum(abs2, w*vx) / sum(abs2, vx)
+        rv = rv + cv[2] * sum(abs2, w*vm1) / sum(abs2, vm1)
+        rv = rv + cv[3] * sum(abs2, w*vm2) / sum(abs2, vm2)
+
+        return rv
+
+    end
+
+
+    g! = function(G, z; project=true)
+
+        ux, vx, um1, vm1, um2, vm2 = _split(z)
+
+        _getfit(ux, vx, um1, vm1, um2, vm2)
+
+        rs .= x .- ft # residuals
+
+        rv = sum(abs2, rs)
+
+        uxg, vxg, um1g, vm1g, um2g, vm2g = _split(G)
+
+        # Helper function for penalty gradients
+        function h(u, v, gu, gv, cu, cv)
+            ssu = sum(abs2, u)
+            nu = sum(abs2, w*u)
+            ssv = sum(abs2, v)
+            nv = sum(abs2, w*v)
+            gu .= 2 .* cu .* (ssu .* w2 * u - nu .* u) ./ ssu^2
+            gv .= gv + 2 .* cv .* (ssv .* w2 * v - nv .* v) ./ ssv^2
+        end
+
+        # Penalty gradients
+        h(ux, vx, uxg, vxg, cu[1], cv[1])
+        h(um1, vm1, um1g, vm1g, cu[2], cv[2])
+        h(um2, vm2, um2g, vm2g, cu[3], cv[3])
+
+        # Loss gradient
+        function _getfit(ux, vx, um1, vm1, um2, vm2)
+            for i1 in 1:p
+                for i2 in 1:p
+                    for i3 in 1:p
+                        for i4 in 1:p
+                            uxg[i1] = uxg[i1] - 2 * rs[i1, i2, i3, i4] * vx[i4]
+                            vxg[i4] = vxg[i4] - 2 * rs[i1, i2, i3, i4] * ux[i1]
+                            um1g[i2] = um1g[i2] - 2 * rs[i1, i2, i3, i4] * vm1[i4]
+                            vm1g[i4] = vm1g[i4] - 2 * rs[i1, i2, i3, i4] * um1[i2]
+                            um2g[i3] = um2g[i3] - 2 * rs[i1, i2, i3, i4] * vm2[i4]
+                            vm2g[i4] = vm2g[i4] - 2 * rs[i1, i2, i3, i4] * um2[i3]
+                        end
+                    end
+                end
+            end
+        end
+
+        if project
+
+            proj = function(a, b)
+                return a - dot(a, b) .* b / dot(b, b)
+            end
+
+            uxg .= proj(uxg, ux)
+            vxg .= proj(vxg, vx)
+            um1g .= proj(um1g, um1)
+            vm1g .= proj(vm1g, vm1)
+            um2g .= proj(um2g, um2)
+            vm2g .= proj(vm2g, vm2)
+
+        end
+
+    end
+
+    return tuple(f, g!)
+
+end
+
+# Fit a functional low-rank model to the matrix x.
+function fit_flr_multi(x::Array{Float64,5}, cl::Array{Float64,1}, cr::Array{Float64,1})
+
+    p = size(x, 1)
+    @assert size(x, 1) == size(x, 2) == size(x, 3) == size(x, 4) == size(x, 5)
+
+    pa = zeros(6*p)
+    ux, vx, um1, vm1, um2, vm2 = _split(pa)
+
+    # Starting values
+    ux .= randn(p)
+    vx .= randn(p)
+    um1 .= randn(p)
+    vm1 .= randn(p)
+    um1 .= randn(p)
+    vm2 .= randn(p)
+
+    f, g! = _flr_fungrad_multi(x, cl, cr)
+
+    r = optimize(f, g!, pa, LBFGS())
+    z = Optim.minimizer(r)
+    return tuple(ux, vx, um1, vm1, um2, vm2)
+
+end
+
+
 # Fit a rank-one approximation to a matrix x yielding x ~ u*v', where
 # u and v are vectors.  The fit uses penalization so that u and v are
 # smooth.  This only makes sense if u(i) is expected to be a smooth
