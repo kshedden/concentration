@@ -37,14 +37,8 @@ function _flr_fungrad_multi(x::Array{Float64,4}, cu::Array{Float64,1}, cv::Array
 
     # Fitted values
     function _getfit(ux, vx, um1, vm1, um2, vm2)
-        for i1 in 1:p
-            for i2 in 1:p
-                for i3 in 1:p
-                    for i4 in 1:p
-                        ft[i1, i2, i3, i4] = ux[i1]*vx[i4] + um1[i2]*vm1[i4] + um2[i3]*vm2[i4]
-                    end
-                end
-            end
+        for ii in product(Iterators.repeated(1:p, 4)...)
+            ft[ii...] = ux[ii[1]]*vx[ii[4]] + um1[ii[2]]*vm1[ii[4]] + um2[ii[3]]*vm2[ii[4]]
         end
     end
 
@@ -99,19 +93,14 @@ function _flr_fungrad_multi(x::Array{Float64,4}, cu::Array{Float64,1}, cv::Array
         h(um2, vm2, um2g, vm2g, cu[3], cv[3])
 
         # Loss gradient
-        for i1 in 1:p
-            for i2 in 1:p
-                for i3 in 1:p
-                    for i4 in 1:p
-                        uxg[i1] = uxg[i1] - 2 * rs[i1, i2, i3, i4] * vx[i4]
-                        vxg[i4] = vxg[i4] - 2 * rs[i1, i2, i3, i4] * ux[i1]
-                        um1g[i2] = um1g[i2] - 2 * rs[i1, i2, i3, i4] * vm1[i4]
-                        vm1g[i4] = vm1g[i4] - 2 * rs[i1, i2, i3, i4] * um1[i2]
-                        um2g[i3] = um2g[i3] - 2 * rs[i1, i2, i3, i4] * vm2[i4]
-                        vm2g[i4] = vm2g[i4] - 2 * rs[i1, i2, i3, i4] * um2[i3]
-                    end
-                end
-            end
+        for ii in product(Iterators.repeated(1:p, 4)...)
+            r = -2 * rs[ii...]
+            uxg[ii[1]] += r * vx[ii[4]]
+            vxg[ii[4]] += r * ux[ii[1]]
+            um1g[ii[2]] += r * vm1[ii[4]]
+            vm1g[ii[4]] += r * um1[ii[2]]
+            um2g[ii[3]] += r * vm2[ii[4]]
+            vm2g[ii[4]] += r * um2[ii[3]]
         end
 
         if project
@@ -136,25 +125,34 @@ function _flr_fungrad_multi(x::Array{Float64,4}, cu::Array{Float64,1}, cv::Array
 end
 
 # Fit a functional low-rank model to the matrix x.
-function fit_flr_multi(x::Array{Float64,5}, cl::Array{Float64,1}, cr::Array{Float64,1})
+function fit_flr_multi(x::Array{Float64,4}, cu::Array{Float64,1}, cv::Array{Float64,1}; start=nothing)
 
     p = size(x, 1)
-    @assert size(x, 1) == size(x, 2) == size(x, 3) == size(x, 4) == size(x, 5)
-
-    pa = zeros(6*p)
-    ux, vx, um1, vm1, um2, vm2 = _split(pa)
+    @assert size(x, 1) == size(x, 2) == size(x, 3) == size(x, 4)
 
     # Starting values
-    ux .= randn(p)
-    vx .= randn(p)
-    um1 .= randn(p)
-    vm1 .= randn(p)
-    um1 .= randn(p)
-    vm2 .= randn(p)
+    if !isnothing(start)
+        @assert length(start) == 6*p
+        ux, vx, um1, vm1, um2, vm2 = _split(start)
+    else
+        ux = randn(p)
+        vx = randn(p)
+        um1 = randn(p)
+        vm1 = randn(p)
+        um2 = randn(p)
+        vm2 = randn(p)
+    end
 
-    f, g! = _flr_fungrad_multi(x, cl, cr)
+    pa = vcat(ux, vx, um1, vm1, um2, vm2)
+
+    f, g! = _flr_fungrad_multi(x, cu, cv)
 
     r = optimize(f, g!, pa, LBFGS())
+
+    if !Optim.converged(r)
+        println("fit_flr did not converge")
+    end
+
     z = Optim.minimizer(r)
     return tuple(ux, vx, um1, vm1, um2, vm2)
 
@@ -240,6 +238,11 @@ function fit_flr(x, cl, cr)
     f, g! = _flr_fungrad(x, cl, cr)
 
     r = optimize(f, g!, pa, LBFGS())
+
+    if !Optim.converged(r)
+        println("fit_flr did not converge")
+    end
+
     z = Optim.minimizer(r)
     return tuple(z[1:p], z[p+1:end])
 
@@ -276,8 +279,7 @@ function check_grad(;cl=1.0, cr=1.0, p=10, q=5, e=1e-5)
 
 end
 
-
-function check_grad_multi(;p=10, e=1e-5)
+function gen_multi(p, s)
 
     ux = range(1, stop=5, length=p)
     vx = range(-2, stop=2, length=p)
@@ -288,17 +290,19 @@ function check_grad_multi(;p=10, e=1e-5)
 
     x = zeros(p, p, p, p)
 
-    for i1 in 1:p
-        for i2 in 1:p
-            for i3 in 1:p
-                for i4 in 1:p
-                    x[i1, i2, i3, i4] = ux[i1]*vx[i4] + um1[i2]*vm1[i4] + um2[i3]*vm2[i4]
-                end
-            end
-        end
+    for ii in product(Iterators.repeated(1:p, 4)...)
+        x[ii...] = ux[ii[1]]*vx[ii[4]] + um1[ii[2]]*vm1[ii[4]] + um2[ii[3]]*vm2[ii[4]]
     end
 
-    x = x + randn(p, p, p, p)
+    x = x + s * randn(p, p, p, p)
+
+    return x, ux, vx, um1, vm1, um2, vm2
+
+end
+
+function check_grad_multi(;p=10, s=1.0, e=1e-5)
+
+    x, ux, vx, um1, vm1, um2, vm2 = gen_multi(p, s)
 
     cu = [10., 10., 10.]
     cv = [10., 10., 10.]
@@ -354,6 +358,29 @@ function check_fit(;cl=1.0, cr=1.0, p=10, q=5, e=1e-5)
 
 end
 
+function check_fit_multi()
+
+    p = 10
+    s = 0.2
+    x, ux, vx, um1, vm1, um2, vm2 = gen_multi(p, s)
+
+    # Increasing levels of regularization
+    for c in [0.1, 1, 10, 100, 1000, 10000]
+        cu = [c, c, c, c]
+        cv = [c, c, c, c]
+        uxh, vxh, um1h, vm1h, um2h, vm2h = fit_flr_multi(x, cu, cv)
+        plt = lineplot(1:p, uxh, name="ux_hat")
+        lineplot!(plt, 1:p, ux, name="ux")
+        println(plt)
+        plt = lineplot(1:p, vxh, name="vx_hat")
+        lineplot!(plt, 1:p, vx, name="vx")
+        println(plt)
+    end
+
+end
+
+
 #check_grad()
 #check_fit()
 check_grad_multi()
+check_fit_multi()
