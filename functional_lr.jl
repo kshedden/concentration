@@ -1,4 +1,4 @@
-using Optim, LinearAlgebra
+using Optim, LinearAlgebra, IterTools
 using UnicodePlots # for testing only
 
 # Construct a smoothing penalty matrix for a vector of length p.
@@ -65,7 +65,7 @@ function _flr_fungrad_multi(x::Array{Float64,4}, cu::Array{Float64,1}, cv::Array
     end
 
 
-    g! = function(G, z; project=true)
+    g! = function(G, z; project=false)
 
         ux, vx, um1, vm1, um2, vm2 = _split(z)
 
@@ -84,7 +84,7 @@ function _flr_fungrad_multi(x::Array{Float64,4}, cu::Array{Float64,1}, cv::Array
             ssv = sum(abs2, v)
             nv = sum(abs2, w*v)
             gu .= 2 .* cu .* (ssu .* w2 * u - nu .* u) ./ ssu^2
-            gv .= gv + 2 .* cv .* (ssv .* w2 * v - nv .* v) ./ ssv^2
+            gv .= 2 .* cv .* (ssv .* w2 * v - nv .* v) ./ ssv^2
         end
 
         # Penalty gradients
@@ -117,12 +117,76 @@ function _flr_fungrad_multi(x::Array{Float64,4}, cu::Array{Float64,1}, cv::Array
             vm2g .= proj(vm2g, vm2)
 
         end
-
     end
 
     return tuple(f, g!)
 
 end
+
+# Get starting values for the term u * v' in the decomposition of
+# x, where u corresponds to the i^th axis of x and v corresponds to
+# the fourth axis of x.
+function get_start(x::Array{Float64,4}, i::Int)
+
+    p = size(x, 1)
+    z = zeros(p, p)
+
+    # The indices that we average over.
+    kk = [j for j in [1, 2, 3] if j != i]
+
+    uu, vv = [], []
+    for ii in product(Iterators.repeated(1:p, 2)...)
+
+        for j1 in 1:p
+            for j2 in 1:p
+                jj = [0, 0, 0, j2]
+                jj[i] = j1
+                jj[kk[1]] = ii[1]
+                jj[kk[2]] = ii[2]
+                z[j1, j2] = x[jj...]
+            end
+        end
+
+        u,s,v = svd(z)
+        push!(uu, u[:, 1])
+        push!(vv, v[:, 1])
+
+    end
+
+    uu = hcat(uu...)
+    vv = hcat(vv...)
+
+    u, _, _ = svd(uu)
+    u = u[:, 1]
+    v, _, _ = svd(vv)
+    v = v[:, 1]
+
+    return u, v
+
+end
+
+function check_get_start()
+
+    p = 10
+    u = range(-1, 1, length=10)
+    u = u / norm(u)
+    v = range(-1, 1, length=10).^2
+    v = v / norm(v)
+
+    x = zeros(p, p, p, p)
+    for i in 1:p
+        for j in 1:p
+            x[i, :, j, :] = u * v' + 0.3*randn(p, p)
+        end
+    end
+
+    uh, vh = get_start(x, 2)
+
+    @assert abs(dot(u, uh)) > 0.95
+    @assert abs(dot(v, vh)) > 0.95
+
+end
+
 
 # Fit a functional low-rank model to the matrix x.
 function fit_flr_multi(x::Array{Float64,4}, cu::Array{Float64,1}, cv::Array{Float64,1}; start=nothing)
@@ -135,26 +199,25 @@ function fit_flr_multi(x::Array{Float64,4}, cu::Array{Float64,1}, cv::Array{Floa
         @assert length(start) == 6*p
         ux, vx, um1, vm1, um2, vm2 = _split(start)
     else
-        ux = randn(p)
-        vx = randn(p)
-        um1 = randn(p)
-        vm1 = randn(p)
-        um2 = randn(p)
-        vm2 = randn(p)
+        ux, vx = get_start(x, 1)
+        um1, vm1 = get_start(x, 2)
+        um2, vm2 = get_start(x, 3)
     end
 
     pa = vcat(ux, vx, um1, vm1, um2, vm2)
 
     f, g! = _flr_fungrad_multi(x, cu, cv)
 
-    r = optimize(f, g!, pa, LBFGS())
+    r = optimize(f, g!, pa, LBFGS(), Optim.Options(iterations=100, show_trace=true))
+    println(r)
 
     if !Optim.converged(r)
         println("fit_flr did not converge")
     end
 
     z = Optim.minimizer(r)
-    return tuple(ux, vx, um1, vm1, um2, vm2)
+    uxh, vxh, um1h, vm1h, um2h, vm2h = _split(z)
+    return tuple(uxh, vxh, um1h, vm1h, um2h, vm2h)
 
 end
 
@@ -333,7 +396,7 @@ function check_grad_multi(;p=10, s=1.0, e=1e-5)
     g!(ag, pa, project=false)
 
     d = maximum(abs.((ag - ng) ./ abs.(ng)))
-    @assert d < 1e-3
+    @assert d < 0.005
 
 end
 
@@ -361,26 +424,35 @@ end
 function check_fit_multi()
 
     p = 10
-    s = 0.2
+    s = 1.0
     x, ux, vx, um1, vm1, um2, vm2 = gen_multi(p, s)
+
+    pa = vcat(ux, vx, um1, vm1, um2, vm2)
 
     # Increasing levels of regularization
     for c in [0.1, 1, 10, 100, 1000, 10000]
-        cu = [c, c, c, c]
-        cv = [c, c, c, c]
+        cu = [c, c, c]
+        cv = [c, c, c]
         uxh, vxh, um1h, vm1h, um2h, vm2h = fit_flr_multi(x, cu, cv)
-        plt = lineplot(1:p, uxh, name="ux_hat")
-        lineplot!(plt, 1:p, ux, name="ux")
+        plt = scatterplot(ux, uxh)
         println(plt)
-        plt = lineplot(1:p, vxh, name="vx_hat")
-        lineplot!(plt, 1:p, vx, name="vx")
+        plt = scatterplot(vx, vxh)
+        println(plt)
+        plt = scatterplot(um1, um1h)
+        println(plt)
+        plt = scatterplot(vm1, vm1h)
+        println(plt)
+        plt = scatterplot(um2, um2h)
+        println(plt)
+        plt = scatterplot(vm2, vm2h)
         println(plt)
     end
 
 end
 
 
-#check_grad()
-#check_fit()
+check_grad()
+check_fit()
+check_get_start()
 check_grad_multi()
 check_fit_multi()
