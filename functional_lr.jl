@@ -110,11 +110,8 @@ function _flr_fungrad_multi(x::Array{Float64,4}, cu::Array{Float64,1}, cv::Array
             end
 
             uxg .= proj(uxg, ux)
-            vxg .= proj(vxg, vx)
             um1g .= proj(um1g, um1)
-            vm1g .= proj(vm1g, vm1)
             um2g .= proj(um2g, um2)
-            vm2g .= proj(vm2g, vm2)
 
         end
     end
