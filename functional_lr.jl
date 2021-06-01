@@ -25,6 +25,7 @@ function _split(z, p, q)
 end
 
 
+# Return the objective function used to fit the model and its corresponding gradient function.
 function _flr_fungrad_tensor(x::Array{Float64,1}, p::Int, r::Int, cu::Array{Float64,1}, cv::Array{Float64,1})
 
     @assert length(x) == p^r
@@ -116,10 +117,27 @@ function _flr_fungrad_tensor(x::Array{Float64,1}, p::Int, r::Int, cu::Array{Floa
             end
         end
 
+        # The problem has two constraints: each column of u is normalized to unit
+        # length, and all but the first column of u are centered.  If projecting,
+        # the linearized versions of these constraints are removed from the gradient.
         if project
+
+            proj = zeros(p, 2)
+            proj[:, 1] .= 1
+
             for j in 1:q
-                f = dot(u[:, j], u[:, j])
-                ug[:, j] .-= dot(ug[:, j], u[:, j]) * u[:, j] / f
+
+                if j > 1
+                    # Remove two constraints
+                    proj[:, 2] = u[:, j]
+                    u_, s_, v_ = svd(proj)
+                    ug[:, j] .-= u_ * (u_' * ug[:, j])
+                else
+                    # Remove one constraint
+                    f = sum(abs2, u[:, j])
+                    ug[:, j] .-= dot(ug[:, j], u[:, j]) * u[:, j] / f
+                end
+
             end
         end
     end
@@ -128,6 +146,10 @@ function _flr_fungrad_tensor(x::Array{Float64,1}, p::Int, r::Int, cu::Array{Floa
 
 end
 
+# Use a series of SVD's to obtain starting values for the model parameters.
+# To obtain starting values for column j of u and v, the tensor is averaged
+# over all axes except axis j and the final axis, then the dominant singular
+# vectors are computed.
 function get_start(x::Array{Float64,1}, p::Int, r::Int)
 
     x = copy(x)
@@ -142,24 +164,29 @@ function get_start(x::Array{Float64,1}, p::Int, r::Int)
 
     for j in 1:q
 
+        # Average the tensor over all axes except j and the final axis.
         z .= 0
         for ii in product(Iterators.repeated(1:p, r)...)
             z[ii[j], ii[end]] += xr[ii...]
         end
         z .= z ./ p^(q-1)
 
+        # Except for the first term, the u vector should be centered.
+        if j > 1
+            for j in 1:p
+                z[:, j] .-= mean(z[:, j])
+            end
+        end
+
         uu, ss, vv = svd(z)
         f = sqrt(ss[1])
         u[:, j] = f * uu[:, 1]
         v[:, j] = f * vv[:, 1]
 
+        # Use this scaling to make the representation unique.
         f = norm(u[:, j])
         u[:, j] /= f
         v[:, j] *= f
-
-        for ii in product(Iterators.repeated(1:p, r)...)
-            xr[ii...] -= u[ii[j], j] * v[ii[end], j]
-        end
 
     end
 
@@ -169,10 +196,10 @@ end
 
 function check_get_start()
 
-    p = 5
+    p = 10
     r = 4
     q = r - 1
-    s = 0.0
+    s = 1.0
 
     x, u, v = gen_tensor(p, r, s)
     uh, vh = get_start(x[:], p, r)
@@ -180,7 +207,7 @@ function check_get_start()
     for j in 1:q
         m1 = u[:, j] * v[:, j]'
         m2 = uh[:, j] * vh[:, j]'
-        @assert maximum(abs.(m1 - m2)) < 1e-4
+        println(cor(vec(m1), vec(m2)))
     end
 
 end
@@ -205,7 +232,7 @@ function fit_flr_tensor(x::Array{Float64,1}, p::Int, r::Int, cu::Array{Float64,1
 
     f, g! = _flr_fungrad_tensor(x, p, r, cu, cv)
 
-    r = optimize(f, g!, pa, LBFGS(), Optim.Options(iterations=100, show_trace=true))
+    r = optimize(f, g!, pa, LBFGS(), Optim.Options(iterations=50, show_trace=true))
     println(r)
 
     if !Optim.converged(r)
@@ -219,6 +246,9 @@ function fit_flr_tensor(x::Array{Float64,1}, p::Int, r::Int, cu::Array{Float64,1
 end
 
 
+# Simulate data for testing.  The data are a tensor with r
+# axes, each with length p.  The additive Gaussian error has
+# standard deviation s.
 function gen_tensor(p::Int, r::Int, s::Float64)
 
     q = r - 1
@@ -232,12 +262,17 @@ function gen_tensor(p::Int, r::Int, s::Float64)
         u[:, j] = ic .+ sl*grid
         ic, sl = randn(), randn()
         v[:, j] = ic .+ sl*grid
+
+        # Center to make the representation identified
         if j > 1
             u[:, j] .-= mean(u[:, j])
         end
+
+        # Scale to make the representation identified
         f = norm(u[:, j])
         u[:, j] /= f
         v[:, j] *= f
+
     end
 
     x = zeros(Float64, di...)
@@ -305,7 +340,7 @@ end
 
 function check_fit_tensor(; p=10, r=4, s=1.0)
 
-    s = 1.0
+    s = 0.5
 
     # Number of covariates
     q = r - 1
@@ -316,11 +351,10 @@ function check_fit_tensor(; p=10, r=4, s=1.0)
     pa = vcat(u[:], v[:])
 
     # Increasing levels of regularization
-    for c in [100, 100, 10000]
+    for c in [100, 10000]
         cu = c * ones(q)
         cv = c * ones(q)
         uh, vh = fit_flr_tensor(x[:], p, r, cu, cv)
-        #uh, vh = get_start(x[:], p, r)
 
         for j in 1:q
             m1 = u[:, j] * v[:, j]'
@@ -333,6 +367,6 @@ function check_fit_tensor(; p=10, r=4, s=1.0)
 end
 
 
-check_fit_tensor()
-check_get_start()
-check_grad_tensor()
+#check_fit_tensor()
+#check_get_start()
+#check_grad_tensor()
