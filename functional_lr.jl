@@ -366,7 +366,57 @@ function check_fit_tensor(; p=10, r=4, s=1.0)
 
 end
 
+function reparameterize(u, v)
 
+    @assert size(u, 1) == size(v, 1)
+    @assert size(u, 2) == size(v, 2)
+    p, q = size(u)
+    u = copy(u)
+    v = copy(v)
+
+    m = div(p, 2)
+    mu = zeros(p)
+    for j in 1:q
+        mu += u[m, j] * v[:, j]
+        u[:, j] .-= u[m, j]
+    end
+
+    return tuple(mu, u, v)
+
+end
+
+function check_reparameterize()
+
+    p, q = 10, 4
+    r = q + 1
+    u = randn(p, q)
+    v = randn(p, q)
+
+    mu, u1, v1 = reparameterize(u, v)
+
+    # Build a tensor from the first parameterization.
+    di = p * ones(Int, r)
+    x1 = zeros(di...)
+    for ii in product(Iterators.repeated(1:p, r)...)
+        for k in 1:q
+            x1[ii...] += u[ii[k], k] * v[ii[end], k]
+        end
+    end
+
+    # Build a tensor from the second parameterization.
+    x2 = zeros(di...)
+    for ii in product(Iterators.repeated(1:p, r)...)
+        x2[ii...] = mu[ii[end]]
+        for k in 1:q
+            x2[ii...] += u1[ii[k], k] * v1[ii[end], k]
+        end
+    end
+
+    @assert maximum(abs.(x1 - x2)) < 1e-10
+
+end
+
+#check_reparameterize()
 #check_fit_tensor()
 #check_get_start()
 #check_grad_tensor()
