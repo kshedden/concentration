@@ -246,7 +246,13 @@ function reparameterize(u, v)
     mu = v * u[m, :]
     
     for j in 1:q
+    	# Center
         u[:, j] .-= u[m, j]
+
+		# Scale
+		f = median(abs.(u[:, j]))
+		u[:, j] ./= f
+		v[:, j] .*= f
     end
 
     return tuple(mu, u, v)
