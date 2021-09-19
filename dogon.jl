@@ -10,8 +10,8 @@ end
 
 # Analyze one sex, at specific childhood and adult ages
 sex = "Female"
-age1 = 5.
-age2 = 20.
+age1 = 5.0
+age2 = 20.0
 
 # childhood body size variable (primary exposure)
 # Possibilities: Ht_Ave_Use, WT, HAZ, WAZ
@@ -50,7 +50,7 @@ m = 20
 xr = zeros(m, m)
 
 # Probability points
-pg = collect(range(1/m, 1-1/m, length=m))
+pg = collect(range(1 / m, 1 - 1 / m, length = m))
 
 # Quantiles for childhood body size
 xg = [marg_qnt(cbs, sex, p)(age1) for p in pg]
@@ -63,18 +63,19 @@ xgx = [g(x) for x in xg]
 # set to Z=0 except for childhood body size.
 v = zeros(size(xm, 2))
 
-for j in 1:m
+# Fill in all the estimated quantiles.
+for j = 1:m
     _ = fit(qr, pg[j], 0.1) # important tuning parameter here
-    for i in 1:m
+    for i = 1:m
         v[3] = xgx[i]
         xr[i, j] = predict_smooth(qr, v, bw)
     end
 end
 
-u, v = fit_flr_tensor(vec(xr), m, 2, [1.], [1.0])
+u, v = fit_flr_tensor(vec(xr), m, 2, [1.0], [1.0])
 
 mn, uu, vv = reparameterize(u, v)
 
 println(lineplot(pg, mn))
-println(lineplot(xg, uu[:,1]))
-println(lineplot(pg, vv[:,1]), ylim=[-0.15, 0])
+println(lineplot(xg, uu[:, 1]))
+println(lineplot(pg, vv[:, 1]), ylim = [-0.15, 0])

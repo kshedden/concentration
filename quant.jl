@@ -1,11 +1,4 @@
-using CSV,
-    GZip,
-    DataFrames,
-    NamedArrays,
-    UnicodePlots,
-    LinearAlgebra,
-    Printf,
-    Statistics
+using CSV, GZip, DataFrames, NamedArrays, UnicodePlots, LinearAlgebra, Printf, Statistics
 
 include("functional_lr.jl")
 include("qreg_nn.jl")
@@ -33,14 +26,14 @@ dm = prep("Male")
 # value in x, at the given age, using the data dx.  h is a grid
 # parameter that controls how finely the quantile function is
 # calculated.
-function quant(out, v, x, age, dx; h=0.02, lam=0.1)
+function quant(out, v, x, age, dx; h = 0.02, lam = 0.1)
 
     pl = 0.02:h:0.98 # probability points
     ql = zeros(length(x), length(pl))
 
     dxx = copy(Array(dx[:, ["Age", v]]))
     mn, sd = zeros(2), zeros(2)
-    for j in 1:size(dxx,2)
+    for j = 1:size(dxx, 2)
         mn[j] = mean(dxx[:, j])
         sd[j] = std(dxx[:, j])
         dxx[:, j] = dxx[:, j] .- mn[j]
@@ -49,9 +42,9 @@ function quant(out, v, x, age, dx; h=0.02, lam=0.1)
 
     for (k, p) in enumerate(pl)
         qr = qreg_nn(Array(dx[:, out]), dxx, p, lam)
-	for (i,xv) in enumerate(x)
+        for (i, xv) in enumerate(x)
             z = [(age - mn[1]) / sd[1], (xv - mn[2]) / sd[2]]
-            ql[i, k] = predict_smooth(qr, z, [1., 1.])
+            ql[i, k] = predict_smooth(qr, z, [1.0, 1.0])
         end
     end
 
@@ -62,7 +55,7 @@ end
 # Returns an estimate of the quantiles of 'v' given age, using the
 # data dx.  h is a grid parameter that controls how finely the
 # quantile function is calculated.
-function quant0(v, age, dx; h=0.02, lam=0.1)
+function quant0(v, age, dx; h = 0.02, lam = 0.1)
 
     pl = 0.02:h:0.98 # probability points
     ql = zeros(length(pl))
@@ -77,7 +70,7 @@ function quant0(v, age, dx; h=0.02, lam=0.1)
     z = [age - mn] / sd
     for (k, p) in enumerate(pl)
         qr = qreg_nn(Array(dx[:, v]), dxx, p, lam)
-        ql[k] = predict_smooth(qr, z, [1.])
+        ql[k] = predict_smooth(qr, z, [1.0])
     end
 
     tuple(pl, ql)
@@ -90,34 +83,50 @@ out = "SBP"
 ctrl = "HT"
 
 # Quantiles of the control variable
-p0, q0 = quant0(ctrl, age, df, h=h)
+p0, q0 = quant0(ctrl, age, df, h = h)
 
-plt = lineplot(p0, q0, xlabel=@sprintf("%s probability", ctrl),
-               ylabel=@sprintf("%s quantile", ctrl),
-               title=@sprintf("Quantiles of %s at age %.0f", ctrl, age))
+plt = lineplot(
+    p0,
+    q0,
+    xlabel = @sprintf("%s probability", ctrl),
+    ylabel = @sprintf("%s quantile", ctrl),
+    title = @sprintf("Quantiles of %s at age %.0f", ctrl, age),
+)
 println(plt)
 
-pf, qf = quant(out, ctrl, q0, age, df, h=h)
+pf, qf = quant(out, ctrl, q0, age, df, h = h)
 
-plt = lineplot(pf, qf[1,:], xlabel=@sprintf("%s probability", out),
-               ylabel=@sprintf("%s quantile", out),
-               name=@sprintf("%s=%.1f", ctrl, q0[1]),
-               title=@sprintf("Quantiles of %s at age %.0f given %s", out, age, ctrl))
-lineplot!(plt, qf[end,:], name=@sprintf("%s=%.1f", ctrl, q0[end]))
+plt = lineplot(
+    pf,
+    qf[1, :],
+    xlabel = @sprintf("%s probability", out),
+    ylabel = @sprintf("%s quantile", out),
+    name = @sprintf("%s=%.1f", ctrl, q0[1]),
+    title = @sprintf("Quantiles of %s at age %.0f given %s", out, age, ctrl),
+)
+lineplot!(plt, qf[end, :], name = @sprintf("%s=%.1f", ctrl, q0[end]))
 println(plt)
 
 # Center the quantiles around the median value of the control variable
 ii = div(size(qf, 2) + 1, 2)
 qfc = copy(qf)
-for j in 1:size(qfc,2)
+for j = 1:size(qfc, 2)
     qfc[:, j] = qfc[:, j] .- qfc[ii, j]
 end
 
 # Fit a smooth low-rank model to the residuals
-u, v = fit_flr(qfc, 5., 5.)
+u, v = fit_flr(qfc, 5.0, 5.0)
 
-plt = lineplot(u, xlabel=@sprintf("%s probability", ctrl), ylabel=@sprintf("%s coefficient", ctrl))
+plt = lineplot(
+    u,
+    xlabel = @sprintf("%s probability", ctrl),
+    ylabel = @sprintf("%s coefficient", ctrl),
+)
 println(plt)
 
-plt = lineplot(v, xlabel=@sprintf("%s probability", out), ylabel=@sprintf("%s coefficient", out))
+plt = lineplot(
+    v,
+    xlabel = @sprintf("%s probability", out),
+    ylabel = @sprintf("%s coefficient", out),
+)
 println(plt)

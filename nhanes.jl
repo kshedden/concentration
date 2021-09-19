@@ -22,8 +22,8 @@ for x in ["DEMO", "BPX", "BMX"]
     push!(dx, d)
 end
 
-df = outerjoin(dx[1], dx[2], on=:SEQN)
-df = outerjoin(df, dx[3], on=:SEQN)
+df = outerjoin(dx[1], dx[2], on = :SEQN)
+df = outerjoin(df, dx[3], on = :SEQN)
 
 da = df[:, [:RIAGENDR, :RIDAGEYR, :BPXSY1, :BMXBMI]]
 da = da[completecases(da), :]
@@ -36,11 +36,11 @@ function standardize!(da, v)
     m = mean(da[:, v])
     s = std(da[:, v])
     da[!, u] = (da[:, v] .- m) ./ s
-    return tuple(x->(x-m)/s, x->x*s+m)
+    return tuple(x -> (x - m) / s, x -> x * s + m)
 end
 
-male = da[da.RIAGENDR .== 1, :]
-female = da[da.RIAGENDR .== 2, :]
+male = da[da.RIAGENDR.==1, :]
+female = da[da.RIAGENDR.==2, :]
 
 age_f_x, age_f_r = standardize!(female, :RIDAGEYR)
 age_m_x, age_m_r = standardize!(male, :RIDAGEYR)
@@ -55,7 +55,7 @@ function check_tuning1(dx, p)
     x = Array{Float64,1}(dx[:, :RIDAGEYR_z])[:, :]
     nn = qreg_nn(y, x)
 
-    lam = range(0.01, 0.5, length=10)
+    lam = range(0.01, 0.5, length = 10)
     b = zeros(length(lam))
     for (i, la) in enumerate(lam)
         _ = fit(nn, p, la)
@@ -74,7 +74,7 @@ function check_tuning2(dx, p)
     x = Array{Float64,2}(dx[:, [:RIDAGEYR_z, :BMXBMI_z]])
     nn = qreg_nn(y, x)
 
-    lam = range(0.01, 1, length=10)
+    lam = range(0.01, 1, length = 10)
     b = zeros(length(lam))
     for (i, la) in enumerate(lam)
         _ = fit(nn, p, la)
@@ -108,13 +108,13 @@ for sex in ["female", "male"]
     x = Array{Float64,2}(dx[:, [:RIDAGEYR_z, :BMXBMI_z]])
     nn = qreg_nn(y, x)
 
-    ages = [25., 50., 75.]
+    ages = [25.0, 50.0, 75.0]
     plt0, plt1, plt2 = nothing, nothing, nothing
 
     for age in ages
 
         # Get the BMI quantiles
-        pr = range(0.1, 0.9, length=20)
+        pr = range(0.1, 0.9, length = 20)
         bmi = zeros(length(pr))
         for (i, p) in enumerate(pr)
             fit(nn0, p, 0.2)
@@ -123,10 +123,16 @@ for sex in ["female", "male"]
 
         # Plot the BMI quantiles
         if age == ages[1]
-            plt0 = lineplot(pr, bmi, xlabel="Probability", ylabel="BMI",
-                           title=sex, name=@sprintf("Age=%.0f", age))
+            plt0 = lineplot(
+                pr,
+                bmi,
+                xlabel = "Probability",
+                ylabel = "BMI",
+                title = sex,
+                name = @sprintf("Age=%.0f", age),
+            )
         else
-            lineplot!(plt0, pr, bmi, name=@sprintf("Age=%.0f", age))
+            lineplot!(plt0, pr, bmi, name = @sprintf("Age=%.0f", age))
         end
 
         # Estimate SBP quantiles at each BMI quantile
@@ -143,31 +149,45 @@ for sex in ["female", "male"]
 
         # Plot SBP quantiles at median BMI, for specific age/sex groups
         if age == ages[1]
-            plt1 = lineplot(pr, sbp[ii, :], xlabel="SBP probability point", ylabel="SBP at median BMI",
-                           title=sex, ylim=[100, 150], name=@sprintf("Age=%.0f", age))
+            plt1 = lineplot(
+                pr,
+                sbp[ii, :],
+                xlabel = "SBP probability point",
+                ylabel = "SBP at median BMI",
+                title = sex,
+                ylim = [100, 150],
+                name = @sprintf("Age=%.0f", age),
+            )
         else
-            lineplot!(plt1, pr, sbp[ii, :], name=@sprintf("Age=%.0f", age))
+            lineplot!(plt1, pr, sbp[ii, :], name = @sprintf("Age=%.0f", age))
         end
 
         # Plot median SBP at each BMI quantile, for specific age/sex groups
         if age == ages[1]
-            plt2 = lineplot(pr, sbp[:, ii], xlabel="BMI probability point", ylabel="SBP",
-                           title=sex, ylim=[100, 150], name=@sprintf("Age=%.0f", age))
+            plt2 = lineplot(
+                pr,
+                sbp[:, ii],
+                xlabel = "BMI probability point",
+                ylabel = "SBP",
+                title = sex,
+                ylim = [100, 150],
+                name = @sprintf("Age=%.0f", age),
+            )
         else
-            lineplot!(plt2, pr, sbp[:, ii], name=@sprintf("Age=%.0f", age))
+            lineplot!(plt2, pr, sbp[:, ii], name = @sprintf("Age=%.0f", age))
         end
 
         # Center the SBP quantiles around the median BMI
         sbpc = copy(sbp)
-        for j in 1:size(sbp, 2)
+        for j = 1:size(sbp, 2)
             sbpc[:, j] .= sbp[:, j] .- sbp[ii, j]
         end
 
         # Fit a low rank model to the quantiles
-        u, v = fit_flr(sbpc, 500., 5000.)
-        p = lineplot(u, title=@sprintf("%s BMI loadings at age %.0f", sex, age))
+        u, v = fit_flr(sbpc, 500.0, 5000.0)
+        p = lineplot(u, title = @sprintf("%s BMI loadings at age %.0f", sex, age))
         println(p)
-        p = lineplot(v, title=@sprintf("%s SBP loadings at age %.0f", sex, age))
+        p = lineplot(v, title = @sprintf("%s SBP loadings at age %.0f", sex, age))
         println(p)
 
         # Calculate the R^2

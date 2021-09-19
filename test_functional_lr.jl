@@ -12,13 +12,13 @@ function gen_tensor(p::Int, r::Int, s::Float64)
 
     # Generate data with a random intercept and random
     # slope on this grid.
-    grid = range(-1, 1, length=p)
+    grid = range(-1, 1, length = p)
 
-    for j in 1:q
+    for j = 1:q
         ic, sl = randn(), randn()
-        u[:, j] = ic .+ sl*grid
+        u[:, j] = ic .+ sl * grid
         ic, sl = randn(), randn()
-        v[:, j] = ic .+ sl*grid
+        v[:, j] = ic .+ sl * grid
 
         # Center to make the representation identified
         if j > 1
@@ -34,12 +34,12 @@ function gen_tensor(p::Int, r::Int, s::Float64)
 
     x = zeros(Float64, di...)
     for ii in product(Iterators.repeated(1:p, r)...)
-        for k in 1:q
+        for k = 1:q
             x[ii...] += u[ii[k], k] * v[ii[end], k]
         end
     end
 
-	# Additive noise
+    # Additive noise
     x += s * randn(di...)
 
     return x, u, v
@@ -59,7 +59,7 @@ function check_reparameterize()
     di = fill(p, r)
     x1 = zeros(di...)
     for ii in product(Iterators.repeated(1:p, r)...)
-        for k in 1:q
+        for k = 1:q
             x1[ii...] += u[ii[k], k] * v[ii[end], k]
         end
     end
@@ -68,7 +68,7 @@ function check_reparameterize()
     x2 = zeros(di...)
     for ii in product(Iterators.repeated(1:p, r)...)
         x2[ii...] = mu[ii[end]]
-        for k in 1:q
+        for k = 1:q
             x2[ii...] += u1[ii[k], k] * v1[ii[end], k]
         end
     end
@@ -88,14 +88,14 @@ function check_get_start()
     # Rank of the tensor
     r = q + 1
 
-	for i in 1:10
+    for i = 1:10
 
         x, u, v = gen_tensor(p, r, s)
         uh, vh = get_start(x[:], p, r)
 
-        for j in 1:q
-        	# Correlate true and estimated values for
-    	    # each component.
+        for j = 1:q
+            # Correlate true and estimated values for
+            # each component.
             m1 = u[:, j] * v[:, j]'
             m2 = uh[:, j] * vh[:, j]'
             @assert cor(vec(m1), vec(m2)) > 0.95
@@ -104,11 +104,11 @@ function check_get_start()
 
 end
 
-function check_grad_tensor_helper(;p=10, r=4, s=1.0, e=1e-5, pu=10.0, pv=10.0)
+function check_grad_tensor_helper(; p = 10, r = 4, s = 1.0, e = 1e-5, pu = 10.0, pv = 10.0)
 
     x, u, v = gen_tensor(p, r, s)
 
-    di = p*ones(Int, r)
+    di = p * ones(Int, r)
     q = r - 1
     cu = pu * ones(q)
     cv = pv * ones(q)
@@ -132,7 +132,7 @@ function check_grad_tensor_helper(;p=10, r=4, s=1.0, e=1e-5, pu=10.0, pv=10.0)
 
     # Get the analytic gradient
     ag = zeros(length(pa))
-    g!(ag, pa, project=false)
+    g!(ag, pa, project = false)
 
     d = maximum(abs.((ag - ng) ./ abs.(ng)))
     @assert d < 0.005
@@ -145,15 +145,15 @@ function check_grad_tensor()
 
     for r in [2, 4]
         for pe in [0.0, 5.0, 20.0]
-            for j in 1:5
-                check_grad_tensor_helper(p=10, r=r, s=1.0, e=1e-5, pu=pe, pv=pe)
+            for j = 1:5
+                check_grad_tensor_helper(p = 10, r = r, s = 1.0, e = 1e-5, pu = pe, pv = pe)
             end
         end
     end
 
 end
 
-function check_fit_tensor(; p=10, r=4, s=1.0)
+function check_fit_tensor(; p = 10, r = 4, s = 1.0)
 
     s = 0.5
 
@@ -171,7 +171,7 @@ function check_fit_tensor(; p=10, r=4, s=1.0)
         cv = c * ones(q)
         uh, vh = fit_flr_tensor(x[:], p, r, cu, cv)
 
-        for j in 1:q
+        for j = 1:q
             m1 = u[:, j] * v[:, j]'
             m2 = uh[:, j] * vh[:, j]'
             plt = scatterplot(vec(m1), vec(m2))

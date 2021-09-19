@@ -45,16 +45,16 @@ end
 # Returns the degrees of freedom of the fitted model, which is the
 # number of connected components of the graph defined by all edges
 # of the covariate graph that are fused in the regression fit.
-function degf(qr::Qreg; e=1e-2)::Int
+function degf(qr::Qreg; e = 1e-2)::Int
 
     nn = qr.nn
     fv = qr.fit
     g = SimpleGraph(size(nn, 1))
 
-    for i in 1:size(nn,1)
-        for j in 1:size(nn,2)
-            if abs(fv[i] - fv[nn[i,j]]) < e
-                add_edge!(g, i, nn[i,j])
+    for i = 1:size(nn, 1)
+        for j = 1:size(nn, 2)
+            if abs(fv[i] - fv[nn[i, j]]) < e
+                add_edge!(g, i, nn[i, j])
             end
         end
     end
@@ -68,17 +68,17 @@ function bic(qr::Qreg)::Tuple{Float64,Int}
     d = degf(qr)
     p = qr.p
     resid = qr.y - qr.fit
-    pos = sum(x->clamp(x, 0, Inf), resid)
-    neg = -sum(x->clamp(x, -Inf, 0), resid)
-    check = p*pos + (1-p)*neg
-    sig = (1 - abs(1 - 2*p)) / 2
+    pos = sum(x -> clamp(x, 0, Inf), resid)
+    neg = -sum(x -> clamp(x, -Inf, 0), resid)
+    check = p * pos + (1 - p) * neg
+    sig = (1 - abs(1 - 2 * p)) / 2
     n = length(qr.y)
-    return tuple(2*check/sig + d * log(n), d)
+    return tuple(2 * check / sig + d * log(n), d)
 end
 
 
 # Predict the quantile at the point z using k nearest neighbors.
-function predict(qr::Qreg, z::Array{Float64}; k=5)::Float64
+function predict(qr::Qreg, z::Array{Float64}; k = 5)::Float64
 
     ii, _ = knn(qr.kt, z, k)
     return mean(qr.fit[ii])
@@ -94,13 +94,13 @@ function predict_smooth(qr::Qreg, z::Array{Float64}, bw::Array{Float64})::Float6
     xtx = zeros(r + 1, r + 1)
     xty = zeros(r + 1)
     xr = ones(r + 1)
-    for i in 1:n
+    for i = 1:n
         e = 0.0
-        for j in 1:r
-            e = e + (x[i,j] - z[j]) / bw[j]
+        for j = 1:r
+            e = e + (x[i, j] - z[j]) / bw[j]
         end
-        w = exp(-e*e / 2)
-	    xr[2:end] = x[i, :] - z
+        w = exp(-e * e / 2)
+        xr[2:end] = x[i, :] - z
         xtx .= xtx + w * xr * xr'
         xty .= xty + w * f[i] * xr
     end
@@ -112,14 +112,14 @@ end
 
 # Construct a structure that can be used to perform quantile regression
 # of y on x.  k is the number of nearest neighbors used for regularization.
-function qreg_nn(y::Array{Float64}, x::Array{Float64,2}; k::Int=5)::Qreg
+function qreg_nn(y::Array{Float64}, x::Array{Float64,2}; k::Int = 5)::Qreg
 
     n = length(y)
 
     # Build the nearest neighbor tree, exclude each point from its own
     # neighborhood.
     kt = KDTree(x')
-    nx, _ = knn(kt, x', k+1, true)
+    nx, _ = knn(kt, x', k + 1, true)
     nn = hcat(nx...)'
     nn = nn[:, 2:end]
 
@@ -141,7 +141,7 @@ function qreg_nn(y::Array{Float64}, x::Array{Float64,2}; k::Int=5)::Qreg
     @constraint(model, rpos .>= 0)
     @constraint(model, rneg .>= 0)
     @constraint(model, dcap .>= 0)
-    for j in 1:k
+    for j = 1:k
         @constraint(model, rfit - rfit[nn[:, j]] .<= dcap[:, j])
         @constraint(model, rfit[nn[:, j]] - rfit .<= dcap[:, j])
     end
@@ -156,7 +156,7 @@ end
 # fit.
 function fit(qr::Qreg, p::Float64, lam::Float64)::Array{Float64,1}
 
-    @objective(qr.model, Min, sum(p*qr.rpos + (1-p)*qr.rneg) + lam*sum(qr.dcap))
+    @objective(qr.model, Min, sum(p * qr.rpos + (1 - p) * qr.rneg) + lam * sum(qr.dcap))
 
     optimize!(qr.model)
     if termination_status(qr.model) != MathOptInterface.OPTIMAL
@@ -176,7 +176,7 @@ end
 # lambda is greater than 'lam_max'. The path is returned as an array
 # of triples containing the tuning parameter value, the BIC
 # value, and the degrees of freedom.
-function bic_search(qr::Qreg, p::Float64; fac=1.2, lam_max=1e6, dof_min=2)
+function bic_search(qr::Qreg, p::Float64; fac = 1.2, lam_max = 1e6, dof_min = 2)
 
     pa = []
 
@@ -215,18 +215,18 @@ function check1()
     yq[:, 3] = fit(qr3, 0.75, 0.1)
 
     ax = [-0.67, 0, 0.67] # True intercepts
-    for j in 1:3
-        c = cov(yq[:,j], x[:, 1])
+    for j = 1:3
+        c = cov(yq[:, j], x[:, 1])
         b = c / var(x[:, 1])
-        a = mean(yq[:,j]) - b*mean(x[:,1])
+        a = mean(yq[:, j]) - b * mean(x[:, 1])
         @assert abs(b - 1) < 0.05 # True slope is 1
         @assert abs(a - ax[j]) < 0.1
     end
 
-    bw = [1., 1.]
-    @assert abs(predict_smooth(qr1, [0., 0.], bw) - ax[1]) < 0.1
-    @assert abs(predict_smooth(qr2, [0., 0.], bw) - ax[2]) < 0.1
-    @assert abs(predict_smooth(qr3, [0., 0.], bw) - ax[3]) < 0.1
+    bw = [1.0, 1.0]
+    @assert abs(predict_smooth(qr1, [0.0, 0.0], bw) - ax[1]) < 0.1
+    @assert abs(predict_smooth(qr2, [0.0, 0.0], bw) - ax[2]) < 0.1
+    @assert abs(predict_smooth(qr3, [0.0, 0.0], bw) - ax[3]) < 0.1
 
 end
 
@@ -235,14 +235,14 @@ function check2()
     Random.seed!(342)
     n = 1000
     x = randn(n, 2)
-    y = x[:, 1].^2 + randn(n)
+    y = x[:, 1] .^ 2 + randn(n)
 
     qr = qreg_nn(y, x)
     p = 0.5
 
     lam = 0.1:0.05:1
     b = zeros(length(lam))
-    for (i,la) in enumerate(lam)
+    for (i, la) in enumerate(lam)
         _ = fit(qr, p, la)
         b[i] = bic(qr)
     end
@@ -257,15 +257,15 @@ function check3()
     nrep = 20
     n = 1000
     p = 0.5
-    for j in 1:nrep
+    for j = 1:nrep
         for k in [1, 2]
 
             x = randn(n, k)
-            y = x[:, 1].^2 + randn(n)
+            y = x[:, 1] .^ 2 + randn(n)
 
             qr = qreg_nn(y, x)
 
-            la, pa = bic_search(qr, p, lam_max=1e6)
+            la, pa = bic_search(qr, p, lam_max = 1e6)
             x = [z[2] for z in pa]
             x = x .- minimum(x)
             plt = lineplot(x[3:end])

@@ -5,8 +5,8 @@ using UnicodePlots # for testing only
 # Each row contains the discreteized second derivative at a 
 # specific position.
 function _fpen(p)
-    a = zeros(p-2, p)
-    for i in 1:p-2
+    a = zeros(p - 2, p)
+    for i = 1:p-2
         a[i, i:i+2] = [1 -2 1]
     end
     return a
@@ -28,7 +28,13 @@ end
 
 # Return the objective function and corresponding gradient functions
 # that are used to fit the low rank model.
-function _flr_fungrad_tensor(x::Array{Float64,1}, p::Int, r::Int, cu::Array{Float64,1}, cv::Array{Float64,1})
+function _flr_fungrad_tensor(
+    x::Array{Float64,1},
+    p::Int,
+    r::Int,
+    cu::Array{Float64,1},
+    cv::Array{Float64,1},
+)
 
     @assert length(x) == p^r
 
@@ -36,7 +42,7 @@ function _flr_fungrad_tensor(x::Array{Float64,1}, p::Int, r::Int, cu::Array{Floa
     q = r - 1
 
     # The size of the tensor representation of the data along each axis
-	di = fill(p, r)
+    di = fill(p, r)
 
     # Convert the data to a tensor
     xr = reshape(x, di...)
@@ -53,7 +59,7 @@ function _flr_fungrad_tensor(x::Array{Float64,1}, p::Int, r::Int, cu::Array{Floa
     function _getfit(u, v)
         ft .= 0 # Fitted values
         for ii in product(Iterators.repeated(1:p, r)...)
-            for k in 1:q
+            for k = 1:q
                 ft[ii...] += u[ii[k], k] * v[ii[end], k]
             end
         end
@@ -61,7 +67,7 @@ function _flr_fungrad_tensor(x::Array{Float64,1}, p::Int, r::Int, cu::Array{Floa
     end
 
     # The fitting function (sum of squared residuals).
-    f = function(z::Array{Float64,1})
+    f = function (z::Array{Float64,1})
 
         u, v = _split(z, p, q)
         _getfit(u, v)
@@ -70,16 +76,16 @@ function _flr_fungrad_tensor(x::Array{Float64,1}, p::Int, r::Int, cu::Array{Floa
         rv = sum(abs2, rs)
 
         # Penalty terms
-        for j in 1:q
-            rv += cu[j] * sum(abs2, w*u[:,j]) / sum(abs2, u[:,j])
-            rv += cv[j] * sum(abs2, w*v[:,j]) / sum(abs2, v[:,j])
+        for j = 1:q
+            rv += cu[j] * sum(abs2, w * u[:, j]) / sum(abs2, u[:, j])
+            rv += cv[j] * sum(abs2, w * v[:, j]) / sum(abs2, v[:, j])
         end
 
         return rv
     end
 
     # The gradient of the fitting function
-    g! = function(G, z; project=true)
+    g! = function (G, z; project = true)
 
         # Split the parameters
         u, v = _split(z, p, q)
@@ -94,19 +100,19 @@ function _flr_fungrad_tensor(x::Array{Float64,1}, p::Int, r::Int, cu::Array{Floa
         ug, vg = _split(G, p, q)
 
         # Penalty gradients
-        for j in 1:q
-            ssu = sum(abs2, u[:,j])
-            nu = sum(abs2, w*u[:,j])
-            ssv = sum(abs2, v[:,j])
-            nv = sum(abs2, w*v[:,j])
-            ug[:,j] = 2 .* cu[j] .* (ssu .* w2 * u[:,j] - nu .* u[:,j]) ./ ssu^2
-            vg[:,j] = 2 .* cv[j] .* (ssv .* w2 * v[:,j] - nv .* v[:,j]) ./ ssv^2
+        for j = 1:q
+            ssu = sum(abs2, u[:, j])
+            nu = sum(abs2, w * u[:, j])
+            ssv = sum(abs2, v[:, j])
+            nv = sum(abs2, w * v[:, j])
+            ug[:, j] = 2 .* cu[j] .* (ssu .* w2 * u[:, j] - nu .* u[:, j]) ./ ssu^2
+            vg[:, j] = 2 .* cv[j] .* (ssv .* w2 * v[:, j] - nv .* v[:, j]) ./ ssv^2
         end
 
         # Loss gradient
         for ii in product(Iterators.repeated(1:p, r)...)
             f = -2 * rs[ii...]
-            for j in 1:q
+            for j = 1:q
                 ug[ii[j], j] += f * v[ii[end], j]
                 vg[ii[end], j] += f * u[ii[j], j]
             end
@@ -120,7 +126,7 @@ function _flr_fungrad_tensor(x::Array{Float64,1}, p::Int, r::Int, cu::Array{Floa
             proj = zeros(p, 2)
             proj[:, 1] .= 1
 
-            for j in 1:q
+            for j = 1:q
 
                 if j > 1
                     # Remove two constraints
@@ -157,18 +163,18 @@ function get_start(x::Array{Float64,1}, p::Int, r::Int)
     di = p * ones(Int, r)
     xr = reshape(x, di...)
 
-    for j in 1:q
+    for j = 1:q
 
         # Average the tensor over all axes except j and the final axis.
         z .= 0
         for ii in product(Iterators.repeated(1:p, r)...)
             z[ii[j], ii[end]] += xr[ii...]
         end
-        z .= z ./ p^(q-1)
+        z .= z ./ p^(q - 1)
 
         # Except for the first term, the u vector should be centered.
         if j > 1
-            for j in 1:p
+            for j = 1:p
                 z[:, j] .-= mean(z[:, j])
             end
         end
@@ -191,7 +197,14 @@ end
 
 # Fit a functional low-rank model to the tensor x.  The input data x is a flattened representation
 # of a tensor with r axes, each having length p.
-function fit_flr_tensor(x::Array{Float64,1}, p::Int, r::Int, cu::Array{Float64,1}, cv::Array{Float64,1}; start=nothing)
+function fit_flr_tensor(
+    x::Array{Float64,1},
+    p::Int,
+    r::Int,
+    cu::Array{Float64,1},
+    cv::Array{Float64,1};
+    start = nothing,
+)
 
     # Number of covariates
     q = r - 1
@@ -208,7 +221,7 @@ function fit_flr_tensor(x::Array{Float64,1}, p::Int, r::Int, cu::Array{Float64,1
 
     f, g! = _flr_fungrad_tensor(x, p, r, cu, cv)
 
-    r = optimize(f, g!, pa, LBFGS(), Optim.Options(iterations=50, show_trace=true))
+    r = optimize(f, g!, pa, LBFGS(), Optim.Options(iterations = 50, show_trace = true))
     println(r)
 
     if !Optim.converged(r)
@@ -238,21 +251,21 @@ function reparameterize(u, v)
     u = copy(u)
     v = copy(v)
 
-	# The central position of the u axis.
-    m = div(p, 2)
+    # The central position of the u axis.
+    m = div(p, 2) + 1
 
     # The central value that is split out from
     # the factor representation.
     mu = v * u[m, :]
-    
-    for j in 1:q
-    	# Center
+
+    for j = 1:q
+        # Center
         u[:, j] .-= u[m, j]
 
-		# Scale
-		f = median(abs.(u[:, j]))
-		u[:, j] ./= f
-		v[:, j] .*= f
+        # Scale
+        f = median(abs.(u[:, j]))
+        u[:, j] ./= f
+        v[:, j] .*= f
     end
 
     return tuple(mu, u, v)

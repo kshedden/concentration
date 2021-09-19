@@ -15,8 +15,8 @@ function sim(n, d, bw, qf, sf, la)
 
     # Number of grid points
     m = 20
-    xg = range(-2, 2, length=m)
-    pg = range(0.1, 0.9, length=m)
+    xg = range(-2, 2, length = m)
+    pg = range(0.1, 0.9, length = m)
 
     # True quantiles
     tq = zeros(m, m)
@@ -27,14 +27,14 @@ function sim(n, d, bw, qf, sf, la)
     qr = qreg_nn(y, x)
 
     zz = zeros(d)
-    for (j,p) in enumerate(pg)
+    for (j, p) in enumerate(pg)
 
         fit(qr, p, la)
 
-        for (i,z) in enumerate(xg)
+        for (i, z) in enumerate(xg)
             zz[1] = z
-            eq[i,j] = predict_smooth(qr, zz, [bw, bw])
-            tq[i,j] = quantile(Normal(meanfunc(z[1]), sdfunc(z[1])), p)
+            eq[i, j] = predict_smooth(qr, zz, [bw, bw])
+            tq[i, j] = quantile(Normal(meanfunc(z[1]), sdfunc(z[1])), p)
         end
     end
 
@@ -68,7 +68,7 @@ for bw in [0.1, 0.2, 0.4]
             for sf in [0.5, 1]
 
                 eqra, tqra = [], []
-                for j in 1:nrep
+                for j = 1:nrep
                     eq, tq, eqr, tqr = sim(n, k, bw, qf, sf, la)
                     eqr = flip(eqr)
                     tqr = flip(tqr)
@@ -82,15 +82,23 @@ for bw in [0.1, 0.2, 0.4]
                     fig = PyPlot.figure()
                     PyPlot.axes([0.1, 0.1, 0.7, 0.8])
                     PyPlot.grid(true)
-                    for i in 1:nrep
-                        PyPlot.plot(eqra[i][j], color="orange", label="Estimate")
+                    for i = 1:nrep
+                        PyPlot.plot(eqra[i][j], color = "orange", label = "Estimate")
                     end
-                    PyPlot.plot(tqra[1][j], label="True")
+                    PyPlot.plot(tqra[1][j], label = "True")
 
-                    PyPlot.title(@sprintf("Bandwidth=%.2f, Penalty=%.0f, sigma=%.1f, la=%.1f", bw, qf, sf, la))
+                    PyPlot.title(
+                        @sprintf(
+                            "Bandwidth=%.2f, Penalty=%.0f, sigma=%.1f, la=%.1f",
+                            bw,
+                            qf,
+                            sf,
+                            la
+                        )
+                    )
                     PyPlot.ylabel(["u", "v"][j])
                     ha, lb = PyPlot.gca().get_legend_handles_labels()
-                    leg = PyPlot.figlegend(ha[[1,end]], lb[[1,end]], "center right")
+                    leg = PyPlot.figlegend(ha[[1, end]], lb[[1, end]], "center right")
                     leg.draw_frame(false)
 
                     global ixp
@@ -103,6 +111,6 @@ for bw in [0.1, 0.2, 0.4]
     end
 end
 
-f = [@sprintf("plots/%03d.pdf", j) for j in 0:ixp-1]
+f = [@sprintf("plots/%03d.pdf", j) for j = 0:ixp-1]
 c = `gs -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -sOutputFile=simstudy.pdf $f`
 run(c)

@@ -2,8 +2,8 @@
 
 # Construct a smoothing penalty matrix for a vector of length p.
 function _fw(p)
-    a = zeros(p-2, p)
-    for i in 1:p-2
+    a = zeros(p - 2, p)
+    for i = 1:p-2
         a[i, i:i+2] = [1 -2 1]
     end
     return a
@@ -31,7 +31,7 @@ function _flr_fungrad(x::Array{Float64,2}, cl::Float64, cr::Float64)
     gr = zeros(q)
 
     # The function to be minimized
-    f = function(z)
+    f = function (z)
         u = @view(z[1:p])     # left-side parameters
         v = @view(z[p+1:end]) # right-side parameters
         ft .= u * v'          # fitted values
@@ -39,32 +39,32 @@ function _flr_fungrad(x::Array{Float64,2}, cl::Float64, cr::Float64)
 
         # Penalty terms
         ssu = sum(abs2, u)
-        pl = sum(abs2, wl*u) / ssu
+        pl = sum(abs2, wl * u) / ssu
         ssv = sum(abs2, v)
-        pr = sum(abs2, wr*v) / ssv
+        pr = sum(abs2, wr * v) / ssv
 
-        return sum(abs2, rs) + cl*pl + cr*pr
+        return sum(abs2, rs) + cl * pl + cr * pr
     end
 
     # The gradient of f.  If project is false, the gradient is
     # calculated as if the parameters are free in R^{p+q}, if project
     # is true, the gradient is projected to S^p x R^q, which is the
     # natural domain for the parameters.  The gradient is stored in G.
-    g! = function(G, z; project=true)
+    g! = function (G, z; project = true)
         u = @view(z[1:p])     # left-side parameters
         v = @view(z[p+1:end]) # right-side parameters
         ft .= u * v'          # fitted values
         rs .= x .- ft         # residuals
 
         ssu = sum(abs2, u)
-        nl = sum(abs2, wl*u)
+        nl = sum(abs2, wl * u)
         ssv = sum(abs2, v)
-        nr = sum(abs2, wr*v)
+        nr = sum(abs2, wr * v)
         gl .= 2 .* (ssu .* wl2 * u - nl .* u) ./ ssu^2
         gr .= 2 .* (ssv .* wr2 * v - nr .* v) ./ ssv^2
 
-        G[1:p] = -2*rs*v + cl*gl       # left-side gradient
-        G[p+1:end] = -2*rs'*u + cr*gr  # right-side gradient
+        G[1:p] = -2 * rs * v + cl * gl       # left-side gradient
+        G[p+1:end] = -2 * rs' * u + cr * gr  # right-side gradient
 
         if project
             G[1:p] .= G[1:p] .- dot(G[1:p], u) .* u ./ dot(u, u)
@@ -83,7 +83,7 @@ function fit_flr(x, cl, cr)
 
     # Starting values
     u, s, v = svd(x)
-    pa = sqrt(s[1]) .* vcat(u[:, 1],  v[:, 1])
+    pa = sqrt(s[1]) .* vcat(u[:, 1], v[:, 1])
 
     f, g! = _flr_fungrad(x, cl, cr)
 
@@ -99,10 +99,10 @@ function fit_flr(x, cl, cr)
 end
 
 
-function check_grad(;cl=1.0, cr=1.0, p=10, q=5, e=1e-5)
+function check_grad(; cl = 1.0, cr = 1.0, p = 10, q = 5, e = 1e-5)
 
-    u = range(1, stop=5, length=p)
-    v = range(-2, stop=2, length=q)
+    u = range(1, stop = 5, length = p)
+    v = range(-2, stop = 2, length = q)
     x = u * v' + 2.0 * randn(length(u), length(v))
 
     f, g! = _flr_fungrad(x, cl, cr)
@@ -113,7 +113,7 @@ function check_grad(;cl=1.0, cr=1.0, p=10, q=5, e=1e-5)
     uv0 = vcat(u0, v0)
     f0 = f(uv0)
     ng = zeros(sum(size(x)))
-    for i in 1:(p+q)
+    for i = 1:(p+q)
         uv0[i] = uv0[i] + e
         f1 = f(uv0)
         ng[i] = (f1 - f0) / e
@@ -122,23 +122,23 @@ function check_grad(;cl=1.0, cr=1.0, p=10, q=5, e=1e-5)
 
     # Get the analytic gradient
     ag = zeros(p + q)
-    g!(ag, uv0, project=false)
+    g!(ag, uv0, project = false)
 
     d = maximum(abs.((ag - ng) ./ abs.(ng)))
     @assert d < 1e-3
 
 end
 
-function check_fit(;cl=1.0, cr=1.0, p=10, q=5, e=1e-5)
+function check_fit(; cl = 1.0, cr = 1.0, p = 10, q = 5, e = 1e-5)
 
-    u = range(1, stop=5, length=p)
-    v = range(-2, stop=2, length=q)
+    u = range(1, stop = 5, length = p)
+    v = range(-2, stop = 2, length = q)
     x = u * v' + 2.0 * randn(length(u), length(v))
 
     # With no penalization, the SVD gives the solution
     u0, s0, v0 = svd(x)
     u1, v1 = fit_flr(x, 0, 0)
-    e = maximum(abs.(u1*v1' - s0[1]*u0[:, 1]*v0[:, 1]'))
+    e = maximum(abs.(u1 * v1' - s0[1] * u0[:, 1] * v0[:, 1]'))
     @assert e < 1e-9
 
     # Increasing levels of regularization
