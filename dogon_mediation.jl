@@ -56,10 +56,10 @@ xr = zeros(m, m, m, m)
 # Storage for covariate vector.
 v = zeros(size(xm, 2))
 
-# Fill in all the estimated quantiles of SBP (in
-# original units).
+# Estimate quantiles of SBP given childhood body
+# size, SBP is in raw (mm Hg).
 for j = 1:m
-    println(j)
+
     # Estimate a specific quantile of adult SBP
     _ = fit(qr, pg[j], 0.1) # important tuning parameter here
 
@@ -104,7 +104,8 @@ function marginal_qf(med, xm, c, cq, gcbs, bw, pg)
     for i = 1:m
         _ = fit(qr, pg[i], 0.1) # important tuning parameter here
         for j = 1:m
-            # cq is the unstandardized quantile, gcbs standardizes it
+            # cq is the unstandardized quantile of the exposure, gcbs 
+            # standardizes it
             v[3] = gcbs(cq[j])
             medcq[i, j] = predict_smooth(qr, v, bw)
         end
@@ -121,7 +122,9 @@ function marginal_qf(med, xm, c, cq, gcbs, bw, pg)
 
     # Calculate the marginal CDF of the mediator,
     # for a population in which the exposure has
-    # been perturbed by c.
+    # been perturbed by c.  This amounts to averaging
+    # all of the conditional CDFs with appropriate
+    # weights.
     cdfm = function (x)
         sn = Normal()
         q = quantile(sn, pg)
@@ -134,7 +137,7 @@ function marginal_qf(med, xm, c, cq, gcbs, bw, pg)
         return mc
     end
 
-    # Invert the marginal cumulative probabilities to quantiles/
+    # Invert the marginal cumulative probabilities to quantiles.
     x = collect(range(1 / m, 1 - 1 / m, length = m^2))
     y = [cdfm(z) for z in x]
     ii = sortperm(y)
@@ -146,14 +149,24 @@ end
 # of childhood HAZ.
 medh = xmn[4] .+ xsd[4] * xm[:, 4]
 qfh1 = marginal_qf(medh, xm[:, 1:3], -1.0, cq, gcbs, bw[1:3], pg)
-qfh2 = marginal_qf(medh, xm[:, 1:3], 0.0, cq, gcbs, bw[1:3], pg)
-qfh3 = marginal_qf(medh, xm[:, 1:3], 1.0, cq, gcbs, bw[1:3], pg)
+qfh2 = marginal_qf(medh, xm[:, 1:3], 1.0, cq, gcbs, bw[1:3], pg)
 
-# Marginal quantile function of height for perturbed populations
+# Marginal quantile function of BMI for perturbed populations
 # of childhood HAZ.
 medb = xmn[5] .+ xsd[5] * xm[:, 5]
 qfb1 = marginal_qf(medb, xm[:, 1:3], -1.0, cq, gcbs, bw[1:3], pg)
-qfb2 = marginal_qf(medb, xm[:, 1:3], 0.0, cq, gcbs, bw[1:3], pg)
-qfb3 = marginal_qf(medb, xm[:, 1:3], 1.0, cq, gcbs, bw[1:3], pg)
+qfb2 = marginal_qf(medb, xm[:, 1:3], 1.0, cq, gcbs, bw[1:3], pg)
 
-# Indirect effect
+# Indirect effect through height
+scorefh = LinearInterpolation(pg, uu[:, 2], extrapolation_bc = Line())
+hqf = LinearInterpolation(hq, pg, extrapolation_bc = Line())
+qh1 = [scorefh(hqf(qfh1(p))) for p in pg]
+qh2 = [scorefh(hqf(qfh2(p))) for p in pg]
+ieh = (qh2 - qh1) .* vv[:, 2]
+
+# Indirect effect through BMI
+scorefb = LinearInterpolation(pg, uu[:, 3], extrapolation_bc = Line())
+bqf = LinearInterpolation(bq, pg, extrapolation_bc = Line())
+qb1 = [scorefb(bqf(qfb1(p))) for p in pg]
+qb2 = [scorefb(bqf(qfb2(p))) for p in pg]
+ieb = (qb2 - qb1) .* vv[:, 3]
