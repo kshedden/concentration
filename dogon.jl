@@ -20,17 +20,17 @@ cbs = :HAZ
 
 # Get medians of all body size variables, we will focus
 # our findings by controlling at these values.
-cq = marg_qnt(cbs, sex, 0.5)
-hq = marg_qnt(:Ht_Ave_Use, sex, 0.5)
-bq = marg_qnt(:BMI, sex, 0.5)
+cq = marg_qnt(cbs, age1, sex)
+hq = marg_qnt(:Ht_Ave_Use, age2, sex)
+bq = marg_qnt(:BMI, age2, sex)
 
 # Control childhood body-size at the conditional median,
 # with no caliper.
-vl1 = [vs(cbs, cq(age1), Inf)]
+vl1 = [vs(cbs, cq(0.5), Inf)]
 
 # Control adult body-size at their conditional medians, with
 # calipers 10cm for height and 2 kg/m^2 for BMI.
-vl2 = [vs(:Ht_Ave_Use, hq(age2), 10), vs(:BMI, bq(age2), 2)]
+vl2 = [vs(:Ht_Ave_Use, hq(0.5), 10), vs(:BMI, bq(0.5), 2)]
 
 dr = gendat(sex, age1, age2, vl1, vl2)
 
@@ -53,7 +53,7 @@ xr = zeros(m, m)
 pg = collect(range(1 / m, 1 - 1 / m, length = m))
 
 # Quantiles for childhood body size
-xg = [marg_qnt(cbs, sex, p)(age1) for p in pg]
+xg = [marg_qnt(cbs, age1, sex)(p) for p in pg]
 g = x -> (x - xmn[3]) / xsd[3]
 
 # Z-score points for childhood body size
@@ -78,4 +78,4 @@ mn, uu, vv = reparameterize(u, v)
 
 println(lineplot(pg, mn))
 println(lineplot(xg, uu[:, 1]))
-println(lineplot(pg, vv[:, 1]), ylim = [-0.15, 0])
+println(lineplot(pg, vv[:, 1]))

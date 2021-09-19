@@ -157,11 +157,14 @@ function regmat(dvar::Symbol, dr::AbstractDataFrame, vl1::Array{vs,1}, vl2::Arra
     return (yv, xm, xmn, xsd, xna)
 end
 
-# Estimate marginal quantiles by age for 'trait'.
+# Estimate marginal quantiles for 'trait' at a given age.
+# The returned function f(age, p) returns the marginal
+# quantile of 'trait' at probability point 'p' for age
+# 'age'.
 function marg_qnt(
     trait::Symbol,
+    age::Float64,
     sex::String,
-    p::Float64;
     la::Float64 = 1.0,
     bw::Float64 = 1.0,
 )
@@ -173,8 +176,11 @@ function marg_qnt(
     y = Array{Float64,1}(dx[:, trait])
     x = Array{Float64,1}(dx[:, :Age_Yrs])[:, :]
     qr = qreg_nn(y, x)
-    _ = fit(qr, p, la)
 
-    return a -> predict_smooth(qr, [a], [bw])
+    f = function (p::Float64)
+        _ = fit(qr, p, la)
+        return predict_smooth(qr, [age], [bw])
+    end
+
+    return f
 end
-
