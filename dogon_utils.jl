@@ -45,8 +45,8 @@ function restrict(dx::AbstractDataFrame, vl::Array{vs,1})::AbstractDataFrame
 end
 
 # Generate a dataset for longitudinal quantile analysis at two time points.  
-# Conditional quantiles of SBP at age2 are calculated given the values of 
-# the variables in vl1 at age1 and the values of the variables in vl2 at age2.
+# Each row of the resulting dataframe combines the age1 data for the vl1
+# variables with the age2 data for the vl2 variables.
 function gendat(
     sex::String,
     age1::Float64,
@@ -116,12 +116,12 @@ function gendat(
 
     dr = DataFrame(:Id => idv, :Age1 => age1v, :Age2 => age2v, :SBP => sbpv)
 
-    # Add variables measured in childhood (childhood body size)
+    # Include variables measured in childhood (childhood body size)
     for (j, c) in enumerate(vl1)
         dr[:, Symbol(@sprintf("%s1", c.name))] = vd1[j]
     end
 
-    # Add variables in adulthood (SBP or adult body size)
+    # Include variables in adulthood (adult body size)
     for (j, c) in enumerate(vl2)
         dr[:, Symbol(@sprintf("%s2", c.name))] = vd2[j]
     end

@@ -13,9 +13,8 @@ sex = "Female"
 age1 = 5.0
 age2 = 20.0
 
-# childhood body size variable (primary exposure)
+# Childhood body size variable (primary exposure)
 # Possibilities: Ht_Ave_Use, WT, HAZ, WAZ
-#cbs = :Ht_Ave_Use
 cbs = :HAZ
 
 # Number of quantile points to track
@@ -35,22 +34,26 @@ vl1 = [vs(cbs, missing, Inf)]
 # Adult body size variables.
 vl2 = [vs(:Ht_Ave_Use, missing, Inf), vs(:BMI, missing, Inf)]
 
+# This dataframe combines (within subjects) a childhood (age1) record
+# and an adult (age2) record.
 dr = gendat(sex, age1, age2, vl1, vl2)
 
 # The childhood body size is in column 3 of xm.
 yv, xm, xmn, xsd, xna = regmat(:SBP, dr, vl1, vl2)
 
+# Transform from raw coordinates to Z-score coordinates
 gcbs = x -> (x - xmn[3]) / xsd[3]
 gaht = x -> (x - xmn[4]) / xsd[4]
 gabm = x -> (x - xmn[5]) / xsd[5]
 
 # The quantile regression model for SBP given childhood and
-# adult body size, and other controls.
+# adult body size, and other control variables.
 qr = qreg_nn(yv, xm)
 
 # Bandwidth parameters for quantile smoothing
 bw = fill(1.0, size(xm, 2))
 
+# Storage for estimated conditional quantiles.
 xr = zeros(m, m, m, m)
 
 # Storage for covariate vector.
@@ -75,11 +78,13 @@ for j = 1:m
     end
 end
 
+# Fit a low rank model to the estimated quantiles
 u, v = fit_flr_tensor(vec(xr), m, 4, fill(1.0, 3), fill(1.0, 3))
 
+# Put the fitted low rank model into interpretable coordinates
 mn, uu, vv = reparameterize(u, v)
 
-# Direct effect
+# Estimate the direct effect
 sn = Normal()
 qn = quantile(sn, pg)
 pg1 = cdf(sn, qn .- 1)
@@ -138,7 +143,7 @@ function marginal_qf(med, xm, c, cq, gcbs, bw, pg)
     end
 
     # Invert the marginal cumulative probabilities to quantiles.
-    x = collect(range(1 / m, 1 - 1 / m, length = m^2))
+    x = collect(range(minimum(med), maximum(med), length = m))
     y = [cdfm(z) for z in x]
     ii = sortperm(y)
     qf = LinearInterpolation(y[ii], x[ii], extrapolation_bc = Line())
