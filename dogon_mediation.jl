@@ -55,6 +55,8 @@ zbq = gabm.(bq)
 # Bandwidth parameters for quantile smoothing
 bw = fill(1.0, size(xm, 2))
 
+# Estimate quantiles for blood pressure given exposure
+# and two mediators.
 xr = mediation_quantiles(yv, xm, pg, zcq, zhq, zbq, bw)
 
 # Fit a low rank model to the estimated quantiles

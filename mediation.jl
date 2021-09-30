@@ -1,3 +1,4 @@
+include("qreg_nn.jl")
 
 function mediation_quantiles(yv, xm, pg, exq, m1q, m2q, bw)
 

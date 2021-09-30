@@ -1,9 +1,10 @@
-using Distributions, PyPlot, Printf
+using Distributions, PyPlot, Printf, Statistics, UnicodePlots
 
 rm("plots", force = true, recursive = true)
 mkdir("plots")
 
 include("mediation.jl")
+include("functional_lr.jl")
 
 n = 2000
 m = 11
@@ -52,6 +53,31 @@ function make_plots(ifig::Int)::Int
 end
 
 ifig = make_plots(0)
+
+# Fit a low rank model to the estimated quantiles
+u, v = fit_flr_tensor(vec(xr), m, 4, fill(1.0, 3), fill(1.0, 3))
+
+# Put the fitted low rank model into interpretable coordinates
+mn, uu, vv = reparameterize(u, v)
+
+# Fitted values
+xrf = zeros(m, m, m, m)
+for i1 = 1:m
+    for i2 = 1:m
+        for i3 = 1:m
+            for j = 1:m
+                f = mn[j]
+                f += uu[i1, 1] * vv[j, 1]
+                f += uu[i2, 2] * vv[j, 2]
+                f += uu[i3, 3] * vv[j, 3]
+                xrf[i1, i2, i3, j] = f
+            end
+        end
+    end
+end
+
+println(cor(vec(xr), vec(xrf)))
+println(scatterplot(vec(xr), vec(xrf)))
 
 f = [@sprintf("plots/%03d.pdf", j) for j = 0:ifig-1]
 c = `gs -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -sOutputFile=mediation_simstudy.pdf $f`
