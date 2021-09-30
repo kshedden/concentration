@@ -143,13 +143,10 @@ function regmat(dvar::Symbol, dr::AbstractDataFrame, vl1::Array{vs,1}, vl2::Arra
     xm = dr[:, xna]
     xm = Array{Float64,2}(xm)
 
-    xmn, xsd = [], []
+    xmn = mean(xm, dims = 1)
+    xsd = std(xm, dims = 1)
     for j = 1:size(xm, 2)
-        m = mean(xm[:, j])
-        s = std(xm[:, j])
-        push!(xmn, m)
-        push!(xsd, s)
-        xm[:, j] = (xm[:, j] .- m) ./ s
+        xm[:, j] = (xm[:, j] .- xmn[j]) ./ xsd[j]
     end
 
     yv = dr[:, dvar]

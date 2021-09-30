@@ -3,6 +3,7 @@ using DataFrames, GZip, CSV, Printf, Statistics, Distributions, UnicodePlots, In
 include("qreg_nn.jl")
 include("functional_lr.jl")
 include("dogon_utils.jl")
+include("mediation.jl")
 
 df = GZip.open("/home/kshedden/data/Beverly_Strassmann/Cohort_2021.csv.gz") do io
     CSV.read(io, DataFrame)
@@ -46,37 +47,15 @@ gcbs = x -> (x - xmn[3]) / xsd[3]
 gaht = x -> (x - xmn[4]) / xsd[4]
 gabm = x -> (x - xmn[5]) / xsd[5]
 
-# The quantile regression model for SBP given childhood and
-# adult body size, and other control variables.
-qr = qreg_nn(yv, xm)
+# Z-scores of the marginal quantiles
+zcq = gcbs.(cq)
+zhq = gaht.(hq)
+zbq = gabm.(bq)
 
 # Bandwidth parameters for quantile smoothing
 bw = fill(1.0, size(xm, 2))
 
-# Storage for estimated conditional quantiles.
-xr = zeros(m, m, m, m)
-
-# Storage for covariate vector.
-v = zeros(size(xm, 2))
-
-# Estimate quantiles of SBP given childhood body
-# size, SBP is in raw (mm Hg).
-for j = 1:m
-
-    # Estimate a specific quantile of adult SBP
-    _ = fit(qr, pg[j], 0.1) # important tuning parameter here
-
-    for i1 = 1:m # Childhood body size
-        for i2 = 1:m # Adult height
-            for i3 = 1:m # Adult BMI
-                v[3] = gcbs(cq[i1])
-                v[4] = gaht(hq[i2])
-                v[5] = gabm(bq[i3])
-                xr[i1, i2, i3, j] = predict_smooth(qr, v, bw)
-            end
-        end
-    end
-end
+xr = mediation_quantiles(yv, xm, pg, zcq, zhq, zbq, bw)
 
 # Fit a low rank model to the estimated quantiles
 u, v = fit_flr_tensor(vec(xr), m, 4, fill(1.0, 3), fill(1.0, 3))
