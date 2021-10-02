@@ -63,7 +63,7 @@ xr = mediation_quantiles(yv, xm, pg, zcq, zhq, zbq, bw)
 xc, md = center(xr)
 
 # Fit a low rank model to the estimated quantiles
-u, v = fit_flr_tensor(vec(xc), m, 4, fill(1.0, 3), fill(1.0, 3))
+u, v = fit_flr_tensor(xc, fill(1.0, 3), fill(1.0, 3))
 
 # Estimate the direct effect
 sn = Normal()

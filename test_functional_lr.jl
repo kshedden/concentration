@@ -1,3 +1,5 @@
+using Distributions, Printf
+
 include("functional_lr.jl")
 
 # Simulate data for testing.  The data are a tensor with r
@@ -29,15 +31,9 @@ function gen_tensor(p::Int, r::Int, s::Float64)
         f = norm(u[:, j])
         u[:, j] /= f
         v[:, j] *= f
-
     end
 
-    x = zeros(Float64, di...)
-    for ii in product(Iterators.repeated(1:p, r)...)
-        for k = 1:q
-            x[ii...] += u[ii[k], k] * v[ii[end], k]
-        end
-    end
+    x = getfit(u, v)
 
     # Additive noise
     x += s * randn(di...)
@@ -53,7 +49,7 @@ function check_getfitresid()
     u = randn(p, q)
     v = randn(p, q)
 
-    # Calculate the fitted values directly
+    # Calculate the fitted values directly without using iterators
     xf = zeros(p, p, p)
     for i1 = 1:p
         for i2 = 1:p
@@ -83,14 +79,17 @@ function check_get_start()
     for i = 1:10
 
         x, u, v = gen_tensor(p, r, s)
-        uh, vh = get_start(x[:], p, r)
+        uh, vh = get_start(x)
 
         for j = 1:q
             # Correlate true and estimated values for
             # each component.
             m1 = u[:, j] * v[:, j]'
             m2 = uh[:, j] * vh[:, j]'
-            @assert cor(vec(m1), vec(m2)) > 0.95
+            cr = cor(vec(m1), vec(m2))
+            if cr < 0.95
+                error(@sprintf("cor(vec(m1), vec(m2)) = %f < 0.95", cr))
+            end
         end
     end
 
@@ -161,7 +160,7 @@ function check_fit_tensor(; p = 10, r = 4, s = 1.0)
     for c in [100, 10000]
         cu = c * ones(q)
         cv = c * ones(q)
-        uh, vh = fit_flr_tensor(x[:], p, r, cu, cv)
+        uh, vh = fit_flr_tensor(x, cu, cv)
 
         for j = 1:q
             m1 = u[:, j] * v[:, j]'
@@ -170,11 +169,12 @@ function check_fit_tensor(; p = 10, r = 4, s = 1.0)
             println(plt)
         end
     end
-
 end
 
 function check_exact()
 
+    m = 11
+    pg = collect(range(1 / m, 1 - 1 / m, length = m))
     xr = zeros(m, m, m, m)
     for i1 = 1:m
         for i2 = 1:m
@@ -207,5 +207,5 @@ check_getfitresid()
 check_get_start()
 
 # Slow tests
-check_fit_tensor()
 check_grad_tensor()
+check_fit_tensor()

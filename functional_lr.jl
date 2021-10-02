@@ -170,6 +170,7 @@ function _flr_fungrad_tensor(
 
             for j = 1:q
 
+				# TODO is special casing j == 1 needed?
                 if j > 1
                     # Remove two constraints
                     proj[:, 2] = u[:, j]
@@ -180,7 +181,6 @@ function _flr_fungrad_tensor(
                     f = sum(abs2, u[:, j])
                     ug[:, j] .-= dot(ug[:, j], u[:, j]) * u[:, j] / f
                 end
-
             end
         end
     end
@@ -193,17 +193,17 @@ end
 # To obtain starting values for column j of u and v, the tensor is averaged
 # over all axes except axis j and the final axis, then the dominant singular
 # vectors are computed.
-function get_start(x::Array{Float64,1}, p::Int, r::Int)
+function get_start(xr::AbstractArray)::Tuple{AbstractArray,AbstractArray}
 
-    x = copy(x)
-
+    sx = size(xr)
+    r = length(sx)
+    p = sx[1] # All axes assumed to have the same length
     q = r - 1
     u = zeros(p, q)
     v = zeros(p, q)
     z = zeros(p, p)
 
     di = p * ones(Int, r)
-    xr = reshape(x, di...)
 
     for j = 1:q
 
@@ -215,9 +215,10 @@ function get_start(x::Array{Float64,1}, p::Int, r::Int)
         z .= z ./ p^(q - 1)
 
         # Except for the first term, the u vector should be centered.
+        # TODO: what is special about the first axis?
         if j > 1
-            for j = 1:p
-                z[:, j] .-= mean(z[:, j])
+            for k = 1:p
+                z[:, k] .-= mean(z[:, k])
             end
         end
 
@@ -234,19 +235,19 @@ function get_start(x::Array{Float64,1}, p::Int, r::Int)
     end
 
     return u, v
-
 end
 
 # Fit a functional low-rank model to the tensor x.  The input data x is a flattened representation
 # of a tensor with r axes, each having length p.
 function fit_flr_tensor(
-    x::Array{Float64,1},
-    p::Int,
-    r::Int,
+    x::AbstractArray,
     cu::Array{Float64,1},
     cv::Array{Float64,1};
     start = nothing,
 )
+    r = length(size(x))
+    p = size(x)[1]
+    vx = vec(x)
 
     # Number of covariates
     q = r - 1
@@ -256,12 +257,12 @@ function fit_flr_tensor(
         @assert length(start) == 2 * p * q
         u, v = _split(start, p, q)
     else
-        u, v = get_start(x, p, r)
+        u, v = get_start(x)
     end
 
     pa = vcat(u[:], v[:])
 
-    f, g! = _flr_fungrad_tensor(x, p, r, cu, cv)
+    f, g! = _flr_fungrad_tensor(vx, p, r, cu, cv)
 
     r = optimize(f, g!, pa, LBFGS(), Optim.Options(iterations = 50, show_trace = true))
     println(r)
@@ -272,10 +273,20 @@ function fit_flr_tensor(
 
     z = Optim.minimizer(r)
     uh, vh = _split(z, p, q)
-    return tuple(uh, vh)
 
+    # Normalize the representation.  There are various ways to do this,
+    # but here we make the loading vectors have unit norm.
+    for j = 1:size(vh, 2)
+        f = norm(vh[:, 2])
+        vh[:, j] ./= f
+        uh[:, j] .*= f
+    end
+
+    return tuple(uh, vh)
 end
 
+# Remove the "central axis" from the tensor x.  The central axis is
+# x[d, d, ..., d, :] where d is the midpoint of the axis.
 function center(x::AbstractArray)::Tuple{AbstractArray,AbstractArray}
 
     x = copy(x)

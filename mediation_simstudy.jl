@@ -135,12 +135,11 @@ function make_plot2(ifig)
 end
 
 # Fit a low rank model to the estimated quantiles
-u, v = fit_flr_tensor(vec(xc), m, 4, fill(1.0, 3), fill(1.0, 3))
+u, v = fit_flr_tensor(xc, fill(1.0, 3), fill(1.0, 3))
 
 # Fitted fitted values from the low-rank fit
 function check_fit(ifig)
     xrf = getfit(u, v)
-    qt = zeros(m, m, m, m)
     qtc = zeros(m, m, m, m)
     qy = quantile(Normal(0, ys), pg)
     for i1 = 1:m
@@ -149,9 +148,6 @@ function check_fit(ifig)
                 for j = 1:m
                     # The true quantile after centering
                     qtc[i1, i2, i3, j] = yb .* exq[i1] + y1b .* m1q[i2] + y2b .* m2q[i3]
-
-                    # The true quantiles
-                    qt[i1, i2, i3, j] = qy[j] + qtc[i1, i2, i3, j]
                 end
             end
         end
@@ -201,10 +197,6 @@ function check_fit(ifig)
     PyPlot.ylabel("Frequency", size = 15)
     PyPlot.savefig(@sprintf("plots/%03d.pdf", ifig))
     ifig += 1
-
-    # Check that the fitted values are close to the truth
-    #println(cor(vec(xc), vec(xrf)))
-    #println(mean(abs.(vec(xr) - vec(xrf1))))
 
     return ifig
 end
