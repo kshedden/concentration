@@ -26,6 +26,59 @@ function _split(z, p, q)
     return tuple(u, v)
 end
 
+# Get the fitted values and residuals for the low rank
+# tenor model represented by (u, v).  xr are the observed
+# values used to form the residuals.  The fitted values
+# are written into ft and the residuals are written into
+# rs.
+function getfitresid(
+    u::AbstractArray,
+    v::AbstractArray,
+    xr::AbstractArray,
+    ft::AbstractArray,
+    rs::AbstractArray,
+)
+    p = size(u, 1)
+    q = size(u, 2)
+    r = q + 1
+
+    ft .= 0 # Fitted values
+    for ii in product(Iterators.repeated(1:p, r)...)
+        for k = 1:q
+            ft[ii...] += u[ii[k], k] * v[ii[end], k]
+        end
+    end
+    # Calculate residuals only if storage is provided
+    if length(xr) > 0
+        rs .= xr .- ft
+    end
+end
+
+# Get the fitted values and residuals without pre-allocated storage.
+function getfitresid(u::AbstractArray, v::AbstractArray, xr::AbstractArray)
+    p = size(u, 1)
+    q = size(u, 2)
+    r = q + 1
+    di = fill(p, r)
+    ft = zeros(di...)
+    rs = zeros(di...)
+    getfitresid(u, v, xr, ft, rs)
+    return (ft, rs)
+end
+
+# Get the fitted values from a low-rank model specified by u, v, with dimensions p, r.
+function getfit(u::AbstractArray, v::AbstractArray)
+    p = size(u, 1)
+    q = size(u, 2)
+    r = q + 1
+    di = fill(p, r)
+    xr = zeros(di...)
+    ft = zeros(di...)
+    rs = zeros(di...)
+    getfitresid(u, v, xr, ft, rs)
+    return ft
+end
+
 # Return the objective function and corresponding gradient functions
 # that are used to fit the low rank model.
 function _flr_fungrad_tensor(
@@ -55,22 +108,11 @@ function _flr_fungrad_tensor(
     w = _fpen(p)
     w2 = w' * w
 
-    # Set the fitted values and residuals
-    function _getfit(u, v)
-        ft .= 0 # Fitted values
-        for ii in product(Iterators.repeated(1:p, r)...)
-            for k = 1:q
-                ft[ii...] += u[ii[k], k] * v[ii[end], k]
-            end
-        end
-        rs .= xr .- ft # Residuals
-    end
-
     # The fitting function (sum of squared residuals).
     f = function (z::Array{Float64,1})
 
         u, v = _split(z, p, q)
-        _getfit(u, v)
+        getfitresid(u, v, xr, ft, rs)
 
         # Sum of squared residuals
         rv = sum(abs2, rs)
@@ -90,7 +132,7 @@ function _flr_fungrad_tensor(
         # Split the parameters
         u, v = _split(z, p, q)
 
-        _getfit(u, v)
+        getfitresid(u, v, xr, ft, rs)
 
         # Sum of squared residuals
         rv = sum(abs2, rs)
@@ -234,40 +276,28 @@ function fit_flr_tensor(
 
 end
 
+function center(x::AbstractArray)::Tuple{AbstractArray,AbstractArray}
 
-# Reparametrize the model from the form that is directly
-# fit to the data, to a form that is more interpretable.
-# The form that is directly fit to the data is u*v'.
-# The form produced here takes the fitted value
-# at the central position of u, denoted 'mu', and 
-# adjusts u accordingly to produce new scores uu.
-# The fitted values are identical: u*v' = mu + uu*v'.
-# Note that v is not changed by the reparameterization.
-function reparameterize(u, v)
+    x = copy(x)
+    sx = size(x)
+    r = length(sx)
+    m = sx[1] # All axes assumed to have the same length
+    d = div(m, 2) + 1
 
-    @assert size(u, 1) == size(v, 1)
-    @assert size(u, 2) == size(v, 2)
-    p, q = size(u)
-    u = copy(u)
-    v = copy(v)
-
-    # The central position of the u axis.
-    m = div(p, 2) + 1
-
-    # The central value that is split out from
-    # the factor representation.
-    mu = v * u[m, :]
-
-    for j = 1:q
-        # Center
-        u[:, j] .-= u[m, j]
-
-        # Scale
-        f = median(abs.(u[:, j]))
-        u[:, j] ./= f
-        v[:, j] .*= f
+    # Extract the central row (the row at the midpoint of
+    # all axes except the last axis, and taking all elements of the last
+    # axis).
+    ii = fill(d, r)
+    md = zeros(m)
+    for i = 1:m
+        ii[end] = i
+        md[i] = x[ii...]
     end
 
-    return tuple(mu, u, v)
+    # Remove the central row
+    for ii in product(Iterators.repeated(1:m, r)...)
+        x[ii...] -= md[ii[end]]
+    end
 
+    return tuple(x, md)
 end

@@ -72,10 +72,10 @@ for j = 1:m
     end
 end
 
-u, v = fit_flr_tensor(vec(xr), m, 2, [1.0], [1.0])
+xc, md = center(xr)
 
-mn, uu, vv = reparameterize(u, v)
+u, v = fit_flr_tensor(vec(xc), m, 2, [2.0], [2.0])
 
-println(lineplot(pg, mn))
-println(lineplot(xg, uu[:, 1]))
-println(lineplot(pg, vv[:, 1]))
+println(lineplot(pg, md))
+println(lineplot(xg, u[:, 1]))
+println(lineplot(pg, v[:, 1]))

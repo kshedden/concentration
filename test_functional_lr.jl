@@ -46,34 +46,26 @@ function gen_tensor(p::Int, r::Int, s::Float64)
 
 end
 
-function check_reparameterize()
+function check_getfitresid()
 
-    p, q = 10, 4
+    p, q = 10, 2
     r = q + 1
     u = randn(p, q)
     v = randn(p, q)
 
-    mu, u1, v1 = reparameterize(u, v)
-
-    # Build a tensor from the first parameterization.
-    di = fill(p, r)
-    x1 = zeros(di...)
-    for ii in product(Iterators.repeated(1:p, r)...)
-        for k = 1:q
-            x1[ii...] += u[ii[k], k] * v[ii[end], k]
+    # Calculate the fitted values directly
+    xf = zeros(p, p, p)
+    for i1 = 1:p
+        for i2 = 1:p
+            for j = 1:p
+                xf[i1, i2, j] = u[i1, 1] * v[j, 1] + u[i2, 2] * v[j, 2]
+            end
         end
     end
 
-    # Build a tensor from the second parameterization.
-    x2 = zeros(di...)
-    for ii in product(Iterators.repeated(1:p, r)...)
-        x2[ii...] = mu[ii[end]]
-        for k = 1:q
-            x2[ii...] += u1[ii[k], k] * v1[ii[end], k]
-        end
-    end
+    xf_ = getfit(u, v)
 
-    @assert maximum(abs.(x1 - x2)) < 1e-10
+    @assert maximum(abs, xf - xf_) < 1e-8
 
 end
 
@@ -181,8 +173,37 @@ function check_fit_tensor(; p = 10, r = 4, s = 1.0)
 
 end
 
+function check_exact()
+
+    xr = zeros(m, m, m, m)
+    for i1 = 1:m
+        for i2 = 1:m
+            for i3 = 1:m
+                for j = 1:m
+                    f = quantile(Normal(), pg[i1])
+                    f += quantile(Normal(), pg[i2])
+                    f += quantile(Normal(), pg[i3])
+                    xr[i1, i2, i3, j] = quantile(Normal(f, 1), pg[j])
+                end
+            end
+        end
+    end
+
+    xc, md = center(xr)
+
+    u = ones(m, 3)
+    for i1 = 1:m
+        u[i1, :] .= quantile(Normal(), pg[i1])
+    end
+    v = ones(m, 3)
+
+    ft = getfit(u, v)
+    @assert maximum(abs, ft .- xc) < 1e-6
+end
+
 # Fast tests
-check_reparameterize()
+check_exact()
+check_getfitresid()
 check_get_start()
 
 # Slow tests

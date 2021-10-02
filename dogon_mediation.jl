@@ -59,21 +59,21 @@ bw = fill(1.0, size(xm, 2))
 # and two mediators.
 xr = mediation_quantiles(yv, xm, pg, zcq, zhq, zbq, bw)
 
-# Fit a low rank model to the estimated quantiles
-u, v = fit_flr_tensor(vec(xr), m, 4, fill(1.0, 3), fill(1.0, 3))
+# Remove the quantiles at the median exposure and predictors
+xc, md = center(xr)
 
-# Put the fitted low rank model into interpretable coordinates
-mn, uu, vv = reparameterize(u, v)
+# Fit a low rank model to the estimated quantiles
+u, v = fit_flr_tensor(vec(xc), m, 4, fill(1.0, 3), fill(1.0, 3))
 
 # Estimate the direct effect
 sn = Normal()
 qn = quantile(sn, pg)
 pg1 = cdf(sn, qn .- 1)
 pg2 = cdf(sn, qn .+ 1)
-scoref = LinearInterpolation(pg, uu[:, 1], extrapolation_bc = Line())
+scoref = LinearInterpolation(pg, u[:, 1], extrapolation_bc = Line())
 score1 = [scoref(x) for x in pg1]
 score2 = [scoref(x) for x in pg2]
-de = (score2 - score1) .* vv[:, 1]
+de = (score2 - score1) .* v[:, 1]
 
 function marginal_qf(med, xm, c, cq, gcbs, bw, pg)
 
@@ -144,15 +144,15 @@ qfb1 = marginal_qf(medb, xm[:, 1:3], -1.0, cq, gcbs, bw[1:3], pg)
 qfb2 = marginal_qf(medb, xm[:, 1:3], 1.0, cq, gcbs, bw[1:3], pg)
 
 # Indirect effect through height
-scorefh = LinearInterpolation(pg, uu[:, 2], extrapolation_bc = Line())
+scorefh = LinearInterpolation(pg, u[:, 2], extrapolation_bc = Line())
 hqf = LinearInterpolation(hq, pg, extrapolation_bc = Line())
 qh1 = [scorefh(hqf(qfh1(p))) for p in pg]
 qh2 = [scorefh(hqf(qfh2(p))) for p in pg]
-ieh = (qh2 - qh1) .* vv[:, 2]
+ieh = (qh2 - qh1) .* v[:, 2]
 
 # Indirect effect through BMI
-scorefb = LinearInterpolation(pg, uu[:, 3], extrapolation_bc = Line())
+scorefb = LinearInterpolation(pg, u[:, 3], extrapolation_bc = Line())
 bqf = LinearInterpolation(bq, pg, extrapolation_bc = Line())
 qb1 = [scorefb(bqf(qfb1(p))) for p in pg]
 qb2 = [scorefb(bqf(qfb2(p))) for p in pg]
-ieb = (qb2 - qb1) .* vv[:, 3]
+ieb = (qb2 - qb1) .* v[:, 3]

@@ -6,33 +6,65 @@ mkdir("plots")
 include("mediation.jl")
 include("functional_lr.jl")
 
-n = 2000
+n = 1000
 m = 11
-
 pg = collect(range(1 / m, 1 - 1 / m, length = m))
 
 age1 = 0.1 * randn(n)
 age2 = 0.1 * randn(n)
 
-x = randn(n)
-m1 = x + randn(n)
-m2 = x + randn(n)
-y = x + m1 + m2 + randn(n)
-xm = hcat(age1, age2, x, m1, m2)
+# Generate the exposure
+exs = 1.0
+ex = exs .* randn(n)
 
-exq = quantile(Normal(0, 1), pg)
-m1q = quantile(Normal(0, sqrt(2)), pg)
-m2q = quantile(Normal(0, sqrt(2)), pg)
+# Generate the first mediator
+m1a, m1b = 2.0, 3.0
+m1 = m1a .* ex + m1b .* randn(n)
+m1s = sqrt(m1a^2 * exs^2 + m1b^2)
+
+# Generate the second mediator
+m2a, m2b = 3.0, 2.0
+m2 = m2a .* ex + m2b .* randn(n)
+m2s = sqrt(m2a^2 * exs^2 + m2b^2)
+
+# Generate the response
+yb, y1b, y2b, ys = 2.0, 3.0, 4.0, 5.0
+yv = yb .* ex + y1b .* m1 + y2b .* m2 + ys .* randn(n)
+
+# Put everything into a design matrix
+xm = hcat(age1, age2, ex, m1, m2)
+
+# Marginal quantiles of the exposures and mediators
+exq = quantile(Normal(0, exs), pg)
+m1q = quantile(Normal(0, m1s), pg)
+m2q = quantile(Normal(0, m2s), pg)
 
 bw = [1.0, 1, 1, 1, 1]
 
-xr = mediation_quantiles(y, xm, pg, exq, m1q, m2q, bw)
+# Compute conditional quantiles of y given x, m1, and m2.
+xr = mediation_quantiles(yv, xm, pg, exq, m1q, m2q, bw)
 
+# Remove the median
+xc, md = center(xr)
+
+function make_plot0(ifig::Int)::Int
+    PyPlot.clf()
+    PyPlot.grid(true)
+    x = quantile(Normal(0, ys), pg)
+    PyPlot.plot(x, md, "-", color = "orange")
+    PyPlot.plot([minimum(x), maximum(x)], [minimum(md), maximum(md)], "-", color = "grey")
+    PyPlot.xlabel("Actual quantiles", size = 15)
+    PyPlot.ylabel("Estimated quantiles", size = 15)
+    PyPlot.title("Quantiles at median exposure and predictors")
+    PyPlot.savefig(@sprintf("plots/%03d.pdf", ifig))
+    return ifig + 1
+end
+
+# Plot the y quantiles as a function of x, when both mediators are fixed at their median.
 function make_plots(ifig::Int)::Int
     for j = 1:m
-
         # What we want
-        x = exq .+ quantile(Normal(), pg[j])
+        x = yb .* exq .+ quantile(Normal(0, ys), pg[j])
 
         # What we have
         y = xr[:, 6, 6, j]
@@ -40,33 +72,35 @@ function make_plots(ifig::Int)::Int
         PyPlot.clf()
         PyPlot.grid(true)
         PyPlot.plot(x, y, "-", color = "orange")
-        PyPlot.plot([-3, 3], [-3, 3], "-", color = "black")
+        PyPlot.plot(
+            [minimum(x), maximum(x)],
+            [minimum(y), maximum(y)],
+            "-",
+            color = "black",
+        )
         PyPlot.xlabel("Actual quantiles", size = 15)
         PyPlot.ylabel("Estimated quantiles", size = 15)
         PyPlot.title(@sprintf("%.2f quantile of y given x, M1=0, M2=0", pg[j]))
         PyPlot.savefig(@sprintf("plots/%03d.pdf", ifig))
         ifig += 1
-
     end
 
     return ifig
 end
 
-ifig = make_plots(0)
 
 function make_plot2(ifig)
 
     PyPlot.clf()
     PyPlot.grid(true)
 
-    qx = quantile(Normal(0, 1), pg)
-    qm = quantile(Normal(0, sqrt(2)), pg)
+    qy = quantile(Normal(0, ys), pg)
     slopes, icepts = Float64[], Float64[]
     for i1 = 1:m
         for i2 = 1:m
             for i3 = 1:m
                 y = xr[i1, i2, i3, :]
-                x = qx .+ (qx[i1] + qm[i2] + qm[i3])
+                x = qy .+ (yb .* exq[i1] + y1b .* m1q[i2] + y2b .* m2q[i3])
                 slope = cov(y, x) / var(x)
                 icept = mean(y) - slope * mean(x)
                 push!(slopes, slope)
@@ -100,77 +134,60 @@ function make_plot2(ifig)
     return ifig
 end
 
-ifig = make_plot2(ifig)
-
 # Fit a low rank model to the estimated quantiles
-u, v = fit_flr_tensor(vec(xr), m, 4, fill(1.0, 3), fill(1.0, 3))
-
-# Put the fitted low rank model into interpretable coordinates
-mn, uu, vv = reparameterize(u, v)
+u, v = fit_flr_tensor(vec(xc), m, 4, fill(1.0, 3), fill(1.0, 3))
 
 # Fitted fitted values from the low-rank fit
 function check_fit(ifig)
-    xrf1 = zeros(m, m, m, m)
-    xrf2 = zeros(m, m, m, m)
+    xrf = getfit(u, v)
     qt = zeros(m, m, m, m)
-    qx = quantile(Normal(0, 1), pg)
-    qm = quantile(Normal(0, sqrt(2)), pg)
+    qtc = zeros(m, m, m, m)
+    qy = quantile(Normal(0, ys), pg)
     for i1 = 1:m
         for i2 = 1:m
             for i3 = 1:m
                 for j = 1:m
+                    # The true quantile after centering
+                    qtc[i1, i2, i3, j] = yb .* exq[i1] + y1b .* m1q[i2] + y2b .* m2q[i3]
 
-                    # The true quantile
-                    qt[i1, i2, i3, j] = qx[i1] + qm[i2] + qm[i3] + qx[j]
-
-                    # Fitted quantiles
-                    f = mn[j]
-                    f += uu[i1, 1] * vv[j, 1]
-                    f += uu[i2, 2] * vv[j, 2]
-                    f += uu[i3, 3] * vv[j, 3]
-                    xrf1[i1, i2, i3, j] = f
-                    xrf2[i1, i2, i3, j] = u[i1, 1] * v[j, 1]
-                    xrf2[i1, i2, i3, j] += u[i2, 2] * v[j, 2]
-                    xrf2[i1, i2, i3, j] += u[i3, 3] * v[j, 3]
+                    # The true quantiles
+                    qt[i1, i2, i3, j] = qy[j] + qtc[i1, i2, i3, j]
                 end
             end
         end
     end
 
-    # Check that fitted values under two parameterizations agree
-    @assert maximum(abs.(xrf1 - xrf2)) < 1e-8
-
     # Plot low-rank fitted versus raw fitted quantiles
     PyPlot.clf()
     PyPlot.grid(true)
-    PyPlot.plot(vec(xr), vec(xrf1), ".", color = "grey", alpha = 0.2, rasterized = true)
-    PyPlot.xlabel("Raw fitted quantiles", size = 15)
-    PyPlot.ylabel("Low-rank fitted quantiles", size = 15)
+    PyPlot.plot(vec(xc), vec(xrf), ".", color = "grey", alpha = 0.2, rasterized = true)
+    PyPlot.xlabel("Centered raw fitted quantiles", size = 15)
+    PyPlot.ylabel("Centered low-rank fitted quantiles", size = 15)
     PyPlot.savefig(@sprintf("plots/%03d.pdf", ifig))
     ifig += 1
 
     # Plot low-rank fitted versus true quantiles
     PyPlot.clf()
     PyPlot.grid(true)
-    PyPlot.plot(vec(qt), vec(xrf1), ".", color = "grey", alpha = 0.2, rasterized = true)
-    PyPlot.xlabel("True quantiles", size = 15)
-    PyPlot.ylabel("Low-rank fitted quantiles", size = 15)
+    PyPlot.plot(vec(qtc), vec(xrf), ".", color = "grey", alpha = 0.2, rasterized = true)
+    PyPlot.xlabel("Centered true quantiles", size = 15)
+    PyPlot.ylabel("Centered low-rank fitted quantiles", size = 15)
     PyPlot.savefig(@sprintf("plots/%03d.pdf", ifig))
     ifig += 1
 
     # Plot raw fitted versus true quantiles
     PyPlot.clf()
     PyPlot.grid(true)
-    PyPlot.plot(vec(qt), vec(xr), ".", color = "grey", alpha = 0.2, rasterized = true)
-    PyPlot.xlabel("True quantiles", size = 15)
-    PyPlot.ylabel("Raw fitted quantiles", size = 15)
+    PyPlot.plot(vec(qtc), vec(xc), ".", color = "grey", alpha = 0.2, rasterized = true)
+    PyPlot.xlabel("Centered true quantiles", size = 15)
+    PyPlot.ylabel("Centered raw fitted quantiles", size = 15)
     PyPlot.savefig(@sprintf("plots/%03d.pdf", ifig))
     ifig += 1
 
     # Histogram of estimation errors from raw fit
     PyPlot.clf()
     PyPlot.grid(true)
-    PyPlot.hist(vec(xr) - vec(qt))
+    PyPlot.hist(vec(xc) - vec(qtc))
     PyPlot.xlabel("Raw fit estimation residual", size = 15)
     PyPlot.ylabel("Frequency", size = 15)
     PyPlot.savefig(@sprintf("plots/%03d.pdf", ifig))
@@ -179,19 +196,22 @@ function check_fit(ifig)
     # Histogram of estimation errors from low-rank fit
     PyPlot.clf()
     PyPlot.grid(true)
-    PyPlot.hist(vec(xrf1) - vec(qt))
+    PyPlot.hist(vec(xrf) - vec(qtc))
     PyPlot.xlabel("Low-rank fit estimation residual", size = 15)
     PyPlot.ylabel("Frequency", size = 15)
     PyPlot.savefig(@sprintf("plots/%03d.pdf", ifig))
     ifig += 1
 
     # Check that the fitted values are close to the truth
-    println(cor(vec(xr), vec(xrf1)))
-    println(mean(abs.(vec(xr) - vec(xrf1))))
+    #println(cor(vec(xc), vec(xrf)))
+    #println(mean(abs.(vec(xr) - vec(xrf1))))
 
     return ifig
 end
 
+ifig = make_plot0(0)
+ifig = make_plots(ifig)
+ifig = make_plot2(ifig)
 ifig = check_fit(ifig)
 
 f = [@sprintf("plots/%03d.pdf", j) for j = 0:ifig-1]
