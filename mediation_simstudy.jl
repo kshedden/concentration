@@ -52,7 +52,9 @@ function make_plot0(ifig::Int)::Int
     PyPlot.grid(true)
     x = quantile(Normal(0, ys), pg)
     PyPlot.plot(x, md, "-", color = "orange")
-    PyPlot.plot([minimum(x), maximum(x)], [minimum(md), maximum(md)], "-", color = "grey")
+    mn = min(minimum(x), minimum(y))
+    mx = max(maximum(x), maximum(y))
+    PyPlot.plot([mn, mx], [mn, mx], "-", color = "black")
     PyPlot.xlabel("Actual quantiles", size = 15)
     PyPlot.ylabel("Estimated quantiles", size = 15)
     PyPlot.title("Quantiles at median exposure and predictors")
@@ -72,12 +74,9 @@ function make_plots(ifig::Int)::Int
         PyPlot.clf()
         PyPlot.grid(true)
         PyPlot.plot(x, y, "-", color = "orange")
-        PyPlot.plot(
-            [minimum(x), maximum(x)],
-            [minimum(y), maximum(y)],
-            "-",
-            color = "black",
-        )
+        mn = min(minimum(x), minimum(y))
+        mx = max(maximum(x), maximum(y))
+        PyPlot.plot([mn, mx], [mn, mx], "-", color = "black")
         PyPlot.xlabel("Actual quantiles", size = 15)
         PyPlot.ylabel("Estimated quantiles", size = 15)
         PyPlot.title(@sprintf("%.2f quantile of y given x, M1=0, M2=0", pg[j]))

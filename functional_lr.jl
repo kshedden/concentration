@@ -169,18 +169,9 @@ function _flr_fungrad_tensor(
             proj[:, 1] .= 1
 
             for j = 1:q
-
-				# TODO is special casing j == 1 needed?
-                if j > 1
-                    # Remove two constraints
-                    proj[:, 2] = u[:, j]
-                    u_, s_, v_ = svd(proj)
-                    ug[:, j] .-= u_ * (u_' * ug[:, j])
-                else
-                    # Remove one constraint
-                    f = sum(abs2, u[:, j])
-                    ug[:, j] .-= dot(ug[:, j], u[:, j]) * u[:, j] / f
-                end
+                f = sum(abs2, v[:, j])
+                vg[:, j] .-= dot(vg[:, j], v[:, j]) * v[:, j] / f
+                ug[div(p, 2), j] = 0
             end
         end
     end
@@ -202,8 +193,7 @@ function get_start(xr::AbstractArray)::Tuple{AbstractArray,AbstractArray}
     u = zeros(p, q)
     v = zeros(p, q)
     z = zeros(p, p)
-
-    di = p * ones(Int, r)
+    di = fill(p, r)
 
     for j = 1:q
 
@@ -212,15 +202,7 @@ function get_start(xr::AbstractArray)::Tuple{AbstractArray,AbstractArray}
         for ii in product(Iterators.repeated(1:p, r)...)
             z[ii[j], ii[end]] += xr[ii...]
         end
-        z .= z ./ p^(q - 1)
-
-        # Except for the first term, the u vector should be centered.
-        # TODO: what is special about the first axis?
-        if j > 1
-            for k = 1:p
-                z[:, k] .-= mean(z[:, k])
-            end
-        end
+        z ./= p^(q - 1)
 
         uu, ss, vv = svd(z)
         f = sqrt(ss[1])
@@ -228,9 +210,9 @@ function get_start(xr::AbstractArray)::Tuple{AbstractArray,AbstractArray}
         v[:, j] = f * vv[:, 1]
 
         # Use this scaling to make the representation unique.
-        f = norm(u[:, j])
-        u[:, j] /= f
-        v[:, j] *= f
+        f = norm(v[:, j])
+        u[:, j] *= f
+        v[:, j] /= f
 
     end
 
@@ -277,7 +259,7 @@ function fit_flr_tensor(
     # Normalize the representation.  There are various ways to do this,
     # but here we make the loading vectors have unit norm.
     for j = 1:size(vh, 2)
-        f = norm(vh[:, 2])
+        f = norm(vh[:, j])
         vh[:, j] ./= f
         uh[:, j] .*= f
     end
