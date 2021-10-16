@@ -1,7 +1,7 @@
 using DataFrames, Printf
 
 # Specify a variable to match on
-mutable struct vs
+mutable struct vspec
 
     # The variable name
     name::Symbol
@@ -30,7 +30,7 @@ function gpix(df)::Dict{Int,Array{Int,1}}
 end
 
 # Restrict the dataframe according to the variable specifications
-function restrict(dx::AbstractDataFrame, vl::Array{vs,1})::AbstractDataFrame
+function restrict(dx::AbstractDataFrame, vl::Array{vspec,1})::AbstractDataFrame
 
     f = function (r)
         for v in vl
@@ -48,17 +48,18 @@ end
 # Each row of the resulting dataframe combines the age1 data for the vl1
 # variables with the age2 data for the vl2 variables.
 function gendat(
+    outcome::Symbol,
     sex::String,
     age1::Float64,
     age2::Float64,
-    vl1::Array{vs,1},
-    vl2::Array{vs,1},
+    vl1::Array{vspec,1},
+    vl2::Array{vspec,1},
 )
 
     # Always stratify by sex.
     dx = filter(r -> r.Sex == sex, df)
 
-    # Get all variable names that we need, except for SBP.
+    # Get all variable names that we need, except for the outcome.
     na = [:ID, :Age_Yrs]
     push!(na, [x.name for x in vl1]...)
     push!(na, [x.name for x in vl2]...)
@@ -67,12 +68,12 @@ function gendat(
     # Drop rows where any of the core variables are missing.
     # SBP may be missing in childhood, all other variables
     # must be observed.
-    dx = dx[:, vcat(na, :SBP_MEAN)]
+    dx = dx[:, vcat(na, outcome)]
     dx = dx[completecases(dx[:, na]), :]
 
     # Split into childhood and adult datasets
     dx1 = filter(r -> r.Age_Yrs <= 10, dx)
-    dx2 = filter(r -> r.Age_Yrs >= 12 && !ismissing(r.SBP_MEAN), dx)
+    dx2 = filter(r -> r.Age_Yrs >= 12 && !ismissing(r[outcome]), dx)
 
     # Restrict to data close to the target ages
     dx1 = filter(r -> abs(r.Age_Yrs - age1) <= 1.5, dx1)
@@ -85,7 +86,7 @@ function gendat(
     ix1 = gpix(dx1)
     ix2 = gpix(dx2)
 
-    idv, age1v, age2v, sbpv = Int[], Float64[], Float64[], Float64[]
+    idv, age1v, age2v, outv = Int[], Float64[], Float64[], Float64[]
     vd1 = [Float64[] for j = 1:length(vl1)]
     vd2 = [Float64[] for j = 1:length(vl2)]
     for (k, ii) in ix1
@@ -101,7 +102,7 @@ function gendat(
                 push!(idv, k)
                 push!(age1v, dx1[i, :Age_Yrs])
                 push!(age2v, dx2[j, :Age_Yrs])
-                push!(sbpv, dx2[j, :SBP_MEAN])
+                push!(outv, dx2[j, outcome])
 
                 for (l, v) in enumerate(vl1)
                     push!(vd1[l], dx1[i, v.name])
@@ -114,7 +115,7 @@ function gendat(
         end
     end
 
-    dr = DataFrame(:Id => idv, :Age1 => age1v, :Age2 => age2v, :SBP => sbpv)
+    dr = DataFrame(:Id => idv, :Age1 => age1v, :Age2 => age2v, outcome => outv)
 
     # Include variables measured in childhood (childhood body size)
     for (j, c) in enumerate(vl1)
@@ -133,7 +134,12 @@ end
 # variable 'dvar'.  Standardize all variables and return the mean/sd
 # used for standardization so we can map between the original and
 # standardized scales.
-function regmat(dvar::Symbol, dr::AbstractDataFrame, vl1::Array{vs,1}, vl2::Array{vs,1})
+function regmat(
+    dvar::Symbol,
+    dr::AbstractDataFrame,
+    vl1::Array{vspec,1},
+    vl2::Array{vspec,1},
+)
 
     xna = [:Age1, :Age2]
     push!(xna, [Symbol(@sprintf("%s1", x.name)) for x in vl1]...)
@@ -151,7 +157,7 @@ function regmat(dvar::Symbol, dr::AbstractDataFrame, vl1::Array{vs,1}, vl2::Arra
 
     yv = dr[:, dvar]
 
-    return (yv, xm, xmn, xsd, xna)
+    return tuple(yv, xm, xmn, xsd, xna)
 end
 
 # Estimate marginal quantiles for 'trait' at a given age.

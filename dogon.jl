@@ -26,7 +26,7 @@ bq = marg_qnt(:BMI, age2, sex)
 
 # Control childhood body-size at the conditional median,
 # with no caliper.
-vl1 = [vs(cbs, cq(0.5), Inf)]
+vl1 = [vspec(cbs, cq(0.5), Inf)]
 
 # Control adult body-size at their conditional medians, with
 # calipers 10cm for height and 2 kg/m^2 for BMI.
