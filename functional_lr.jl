@@ -240,6 +240,7 @@ function fit_flr_tensor(
         u, v = _split(start, p, q)
     else
         u, v = get_start(x)
+        u[div(p, 2), :] .= 0 # Assume that central axis is removed
     end
 
     pa = vcat(u[:], v[:])

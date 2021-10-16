@@ -66,7 +66,7 @@ function check_get_start()
 
     Random.seed!(3942)
 
-    p = 10 # Number of grid points
+    p = 11 # Number of grid points
     q = 3 # Number of covariates
     s = 0.01 # Additive noise
 
@@ -217,5 +217,5 @@ check_getfitresid()
 check_get_start()
 
 # Slow tests
-#check_grad_tensor()
+check_grad_tensor()
 check_fit_tensor()
