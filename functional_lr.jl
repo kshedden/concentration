@@ -171,7 +171,7 @@ function _flr_fungrad_tensor(
             for j = 1:q
                 f = sum(abs2, v[:, j])
                 vg[:, j] .-= dot(vg[:, j], v[:, j]) * v[:, j] / f
-                ug[div(p, 2), j] = 0
+                ug[div(p, 2) + 1, j] = 0
             end
         end
     end
@@ -216,6 +216,8 @@ function get_start(xr::AbstractArray)::Tuple{AbstractArray,AbstractArray}
 
     end
 
+	u[div(p, 2) + 1, :] .= 0
+	
     return u, v
 end
 
@@ -240,7 +242,7 @@ function fit_flr_tensor(
         u, v = _split(start, p, q)
     else
         u, v = get_start(x)
-        u[div(p, 2), :] .= 0 # Assume that central axis is removed
+        u[div(p, 2) + 1, :] .= 0 # Assume that central axis is removed
     end
 
     pa = vcat(u[:], v[:])

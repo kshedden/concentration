@@ -142,7 +142,7 @@ function check_grad_tensor()
                     pv = pe,
                 )
                 if d > 0.01
-                    println("d=$(d)")
+                    println("Failed: d=$(d), r=$(r), pe=$(pe), j=$(j)")
                     nfail += 1
                 else
                     npass += 1
