@@ -54,7 +54,7 @@ exq = quantile(Normal(0, exs), pg)
 m1q = quantile(Normal(0, m1s), pg)
 m2q = quantile(Normal(0, m2s), pg)
 
-bw = [1.0, 1, 1, 1, 1]*0.25
+bw = [1.0, 1, 1, 1, 1] * 0.25
 
 # Compute conditional quantiles of y given x, m1, and m2.
 xr = mediation_quantiles(yv, xm, pg, exq, m1q, m2q, bw)
@@ -70,23 +70,21 @@ vx = vec(xc)
 f, g! = _flr_fungrad_tensor(vx, p, r, cu, cv)
 
 # Check the derivatives at this point
-pa = vcat(vec(u), vec(v))
 u, v = get_start(xc)
+pa = vcat(vec(u), vec(v))
 
 # Calculate the derivative analytically
 grad1 = zeros(length(pa))
-g!(grad1, pa, project=false)
+g!(grad1, pa, project = false)
 
 # Calculate the derivative numerically
 grad2 = zeros(length(pa))
 for i in eachindex(pa)
-	ee = 1e-5
-	e = zeros(length(pa))
-	e[i] = ee
-	grad2[i] = (f(pa + e) - f(pa)) ./ ee
+    ee = 1e-10
+    e = zeros(length(pa))
+    e[i] = ee
+    grad2[i] = (f(pa + e) - f(pa)) ./ ee
 end
-
-error("")
 
 # Fit a low rank model to the estimated quantiles
 u, v = fit_flr_tensor(xc, fill(1.0, 3), fill(1.0, 3))

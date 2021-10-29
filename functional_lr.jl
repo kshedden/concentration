@@ -165,13 +165,27 @@ function _flr_fungrad_tensor(
         # the linearized versions of these constraints are removed from the gradient.
         if project
 
-            proj = zeros(p, 2)
-            proj[:, 1] .= 1
+            # Types of constraints
+            # 1 = u sums to 0 and v has unit norm
+            # 2 = u sums to 0 and u has unit norm
+            constraint_type = 1
+
+            # Use this only if constraint_type = 2
+            proj = zeros(size(u, 1), 2)
 
             for j = 1:q
-                f = sum(abs2, v[:, j])
-                vg[:, j] .-= dot(vg[:, j], v[:, j]) * v[:, j] / f
-                ug[div(p, 2) + 1, j] = 0
+
+                if constraint_type == 1
+                    f = sum(abs2, v[:, j])
+                    vg[:, j] .-= dot(vg[:, j], v[:, j]) * v[:, j] / f
+                    ug[:, j] .-= mean(ug[:, j])
+                else
+                    proj[:, 1] .= 1
+                    proj[:, 2] .= u[:, j]
+                    u_, _, _ = svd(proj)
+                    ug[:, j] .-= u_ * (u_' * ug[:, j])
+                end
+
             end
         end
     end
@@ -216,8 +230,8 @@ function get_start(xr::AbstractArray)::Tuple{AbstractArray,AbstractArray}
 
     end
 
-	u[div(p, 2) + 1, :] .= 0
-	
+    u[div(p, 2)+1, :] .= 0
+
     return u, v
 end
 
@@ -242,7 +256,7 @@ function fit_flr_tensor(
         u, v = _split(start, p, q)
     else
         u, v = get_start(x)
-        u[div(p, 2) + 1, :] .= 0 # Assume that central axis is removed
+        u[div(p, 2)+1, :] .= 0 # Assume that central axis is removed
     end
 
     pa = vcat(u[:], v[:])
