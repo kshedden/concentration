@@ -168,7 +168,7 @@ function _flr_fungrad_tensor(
             # Types of constraints
             # 1 = u sums to 0 and v has unit norm
             # 2 = u sums to 0 and u has unit norm
-            constraint_type = 1
+            constraint_type = 2
 
             # Use this only if constraint_type = 2
             proj = zeros(size(u, 1), 2)
