@@ -3,6 +3,9 @@ include("qreg_nn.jl")
 # A low rank representation of a quantile model.
 mutable struct QModel
 
+	# The dataframe from which data are drawn
+	dr::AbstractDataFrame
+
     # The estimated quantiles.
     xr::AbstractArray
 
@@ -119,7 +122,7 @@ function mediation_prep(outcome, cbs, med1, med2, sex, age1, age2, m, vlc, vla, 
     # Fit a low rank model to the estimated quantiles
     u, v = fit_flr_tensor(xc, fill(1.0, 3), fill(1.0, 3))
 
-    return QModel(xr, xc, md, u, v, xm, xmn, xsd, xna, cq, hq, bq, gex, gm1, gm2)
+    return QModel(dr, xr, xc, md, u, v, xm, xmn, xsd, xna, cq, hq, bq, gex, gm1, gm2)
 end
 
 function marginal_qf(med, xm, c, cq, gex, bw, pg)
@@ -178,6 +181,19 @@ function marginal_qf(med, xm, c, cq, gex, bw, pg)
     return qf
 end
 
+mutable struct MediationResult{T<:Real}
+
+	direct::Matrix{T}
+
+	direct_score1::Vector{T}
+	
+	direct_score2::Vector{T}
+
+	indirect1::Matrix{T}
+
+	indirect2::Matrix{T}
+end
+
 function mediation(qrm::QModel)
 
     # Destructure (better syntax in 1.7)
@@ -222,5 +238,5 @@ function mediation(qrm::QModel)
     q22 = [scoref2(qm2f(q2f2(p))) for p in pg]
     ie2 = (q22 - q21) * v[:, 3]'
 
-    return tuple(de, ie1, ie2)
+	return MediationResult(de, score1, score2, ie1, ie2)
 end

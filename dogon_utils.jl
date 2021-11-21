@@ -11,7 +11,6 @@ mutable struct vspec
 
     # Only consider observations within the caliper relative to the target
     caliper::Float64
-
 end
 
 # Get a map from subject id's to arrays containing

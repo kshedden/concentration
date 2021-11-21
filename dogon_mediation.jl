@@ -11,8 +11,8 @@ end
 
 # Analyze one sex, at specific childhood and adult ages
 sex = "Female"
-age1 = 5.0
-age2 = 20.0
+age1 = 3.0
+age2 = 19.0
 
 # The outcome variable
 outcome = :SBP_MEAN
@@ -41,4 +41,6 @@ bw = fill(1.0, 5)
 
 qrm = mediation_prep(outcome, cbs, med1, med2, sex, age1, age2, m, vlc, vla, bw)
 
-de, ie1, ie2 = mediation(qrm)
+mr = mediation(qrm)
+
+

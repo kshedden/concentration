@@ -6,7 +6,7 @@ mkdir("plots")
 include("mediation.jl")
 include("functional_lr.jl")
 
-n = 1000
+n = 4000
 m = 5
 pg = collect(range(1 / m, 1 - 1 / m, length = m))
 
@@ -206,7 +206,7 @@ function check_uv(ifig)
     exs = 1.0
     bxm1, sm1 = 2.0, 3.0
     bxm2, sm2 = 3.0, 2.0
-    bxy, bm1y, bm2y, sy = 2.0, 3.0, 4.0, 0.5
+    bxy, bm1y, bm2y, sy = 2.0, 3.0, 4.0, 5.0
     gs = gspec(exs, bxm1, sm1, bxm2, sm2, bxy, bm1y, bm2y, sy)
     bw = 0.2 .* [1.0, 1, 1, 1, 1]
     nrep = 10
@@ -376,9 +376,9 @@ function check_fit(ifig)
 end
 
 ifig = check_central_axis(0)
-ifig = check_y_given_x(ifig)
-ifig = check_yquant(ifig)
-ifig = check_fit(ifig)
+#ifig = check_y_given_x(ifig)
+#ifig = check_yquant(ifig)
+#ifig = check_fit(ifig)
 ifig = check_uv(ifig)
 
 f = [@sprintf("plots/%03d.pdf", j) for j = 0:ifig-1]
