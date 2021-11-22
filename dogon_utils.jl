@@ -52,7 +52,8 @@ function gendat(
     age1::Float64,
     age2::Float64,
     vl1::Array{vspec,1},
-    vl2::Array{vspec,1},
+    vl2::Array{vspec,1};
+    single = false,
 )
 
     # Always stratify by sex.
@@ -86,29 +87,48 @@ function gendat(
     ix2 = gpix(dx2)
 
     idv, age1v, age2v, outv = Int[], Float64[], Float64[], Float64[]
-    vd1 = [Float64[] for j = 1:length(vl1)]
-    vd2 = [Float64[] for j = 1:length(vl2)]
+    vd1 = [Float64[] for _ = 1:length(vl1)]
+    vd2 = [Float64[] for _ = 1:length(vl2)]
     for (k, ii) in ix1
         if !haskey(ix2, k)
             continue
         end
         jj = ix2[k]
 
-        # Consider all pairings of a childhood observation and an 
-        # adult observation, within one person.
-        for i in ii
-            for j in jj
-                push!(idv, k)
-                push!(age1v, dx1[i, :Age_Yrs])
-                push!(age2v, dx2[j, :Age_Yrs])
-                push!(outv, dx2[j, outcome])
+        if single
+            # Find the best match for each person.
+            _, iq = findmin(abs2, dx1[ii, :Age_Yrs] .- age1)
+            _, jq = findmin(abs2, dx2[jj, :Age_Yrs] .- age2)
 
-                for (l, v) in enumerate(vl1)
-                    push!(vd1[l], dx1[i, v.name])
-                end
+            push!(idv, k)
+            push!(age1v, dx1[iq, :Age_Yrs])
+            push!(age2v, dx2[jq, :Age_Yrs])
+            push!(outv, dx2[jq, outcome])
 
-                for (l, v) in enumerate(vl2)
-                    push!(vd2[l], dx2[j, v.name])
+            for (l, v) in enumerate(vl1)
+                push!(vd1[l], dx1[iq, v.name])
+            end
+
+            for (l, v) in enumerate(vl2)
+                push!(vd2[l], dx2[jq, v.name])
+            end
+        else
+            # Consider all pairings of a childhood observation and an 
+            # adult observation, within one person.
+            for i in ii
+                for j in jj
+                    push!(idv, k)
+                    push!(age1v, dx1[i, :Age_Yrs])
+                    push!(age2v, dx2[j, :Age_Yrs])
+                    push!(outv, dx2[j, outcome])
+
+                    for (l, v) in enumerate(vl1)
+                        push!(vd1[l], dx1[i, v.name])
+                    end
+
+                    for (l, v) in enumerate(vl2)
+                        push!(vd2[l], dx2[j, v.name])
+                    end
                 end
             end
         end

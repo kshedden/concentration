@@ -85,14 +85,14 @@ function mediation_quantiles(yv, xm, pg, exq, m1q, m2q, bw)
     return xr
 end
 
-function mediation_prep(outcome, cbs, med1, med2, sex, age1, age2, m, vlc, vla, bw)
+function mediation_prep(outcome, cbs, med1, med2, sex, age1, age2, m, vlc, vla, bw; single=false)
 
     # Probability points
     pg = collect(range(1 / m, 1 - 1 / m, length = m))
 
     # This dataframe combines (within subjects) a childhood (age1) record
     # and an adult (age2) record.
-    dr = gendat(outcome, sex, age1, age2, vlc, vla)
+    dr = gendat(outcome, sex, age1, age2, vlc, vla; single)
 
     # The exposure is in column 3 of xm.
     yv, xm, xmn, xsd, xna = regmat(outcome, dr, vlc, vla)
