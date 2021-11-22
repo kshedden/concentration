@@ -3,8 +3,8 @@ include("qreg_nn.jl")
 # A low rank representation of a quantile model.
 mutable struct QModel
 
-	# The dataframe from which data are drawn
-	dr::AbstractDataFrame
+    # The dataframe from which data are drawn
+    dr::AbstractDataFrame
 
     # The estimated quantiles.
     xr::AbstractArray
@@ -85,7 +85,20 @@ function mediation_quantiles(yv, xm, pg, exq, m1q, m2q, bw)
     return xr
 end
 
-function mediation_prep(outcome, cbs, med1, med2, sex, age1, age2, m, vlc, vla, bw; single=false)
+function mediation_prep(
+    outcome,
+    cbs,
+    med1,
+    med2,
+    sex,
+    age1,
+    age2,
+    m,
+    vlc,
+    vla,
+    bw;
+    single = false,
+)
 
     # Probability points
     pg = collect(range(1 / m, 1 - 1 / m, length = m))
@@ -183,15 +196,15 @@ end
 
 mutable struct MediationResult{T<:Real}
 
-	direct::Matrix{T}
+    direct::Matrix{T}
 
-	direct_score1::Vector{T}
-	
-	direct_score2::Vector{T}
+    direct_score1::Vector{T}
 
-	indirect1::Matrix{T}
+    direct_score2::Vector{T}
 
-	indirect2::Matrix{T}
+    indirect1::Matrix{T}
+
+    indirect2::Matrix{T}
 end
 
 function mediation(qrm::QModel)
@@ -238,5 +251,5 @@ function mediation(qrm::QModel)
     q22 = [scoref2(qm2f(q2f2(p))) for p in pg]
     ie2 = (q22 - q21) * v[:, 3]'
 
-	return MediationResult(de, score1, score2, ie1, ie2)
+    return MediationResult(de, score1, score2, ie1, ie2)
 end

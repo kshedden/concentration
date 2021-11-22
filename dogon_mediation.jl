@@ -39,6 +39,19 @@ vla = [vspec(med1, missing, Inf), vspec(med2, missing, Inf)]
 # Bandwidth parameters for quantile smoothing
 bw = fill(1.0, 5)
 
-qrm = mediation_prep(outcome, cbs, med1, med2, sex, age1, age2, m, vlc, vla, bw; single=false)
+qrm = mediation_prep(
+    outcome,
+    cbs,
+    med1,
+    med2,
+    sex,
+    age1,
+    age2,
+    m,
+    vlc,
+    vla,
+    bw;
+    single = false,
+)
 
 mr = mediation(qrm)
