@@ -86,6 +86,7 @@ function mediation_quantiles(yv, xm, pg, exq, m1q, m2q, bw)
 end
 
 function mediation_prep(
+    df,
     outcome,
     cbs,
     med1,
@@ -98,6 +99,8 @@ function mediation_prep(
     vla,
     bw;
     single = false,
+    child_age_caliper = child_age_caliper,
+    adult_age_caliper = adult_age_caliper,
 )
 
     # Probability points
@@ -105,7 +108,18 @@ function mediation_prep(
 
     # This dataframe combines (within subjects) a childhood (age1) record
     # and an adult (age2) record.
-    dr = gendat(outcome, sex, age1, age2, vlc, vla; single)
+    dr = gendat(
+        df,
+        outcome,
+        sex,
+        age1,
+        age2,
+        vlc,
+        vla;
+        single,
+        child_age_caliper,
+        adult_age_caliper,
+    )
 
     # The exposure is in column 3 of xm.
     yv, xm, xmn, xsd, xna = regmat(outcome, dr, vlc, vla)

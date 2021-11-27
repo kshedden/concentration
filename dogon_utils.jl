@@ -33,7 +33,8 @@ function restrict(dx::AbstractDataFrame, vl::Array{vspec,1})::AbstractDataFrame
 
     f = function (r)
         for v in vl
-            if !ismissing(v.target) && abs(r[v.name] - v.target) > v.caliper
+            if ismissing(r[v.name]) ||
+               (!ismissing(v.target) && abs(r[v.name] - v.target) > v.caliper)
                 return false
             end
         end
@@ -47,12 +48,15 @@ end
 # Each row of the resulting dataframe combines the age1 data for the vl1
 # variables with the age2 data for the vl2 variables.
 function gendat(
+    df::AbstractDataFrame,
     outcome::Symbol,
     sex::String,
     age1::Float64,
     age2::Float64,
     vl1::Array{vspec,1},
     vl2::Array{vspec,1};
+    child_age_caliper = 1.5,
+    adult_age_caliper = 1.5,
     single = false,
 )
 
@@ -65,23 +69,25 @@ function gendat(
     push!(na, [x.name for x in vl2]...)
     na = unique(na)
 
-    # Drop rows where any of the core variables are missing.
-    # SBP may be missing in childhood, all other variables
-    # must be observed.
+    # Drop unused columns and drop rows where any of the core 
+    # demographic variables are missing.
     dx = dx[:, vcat(na, outcome)]
-    dx = dx[completecases(dx[:, na]), :]
+    dx = dx[completecases(dx[:, [:ID, :Age_Yrs]]), :]
 
     # Split into childhood and adult datasets
     dx1 = filter(r -> r.Age_Yrs <= 10, dx)
-    dx2 = filter(r -> r.Age_Yrs >= 12 && !ismissing(r[outcome]), dx)
+    dx2 = filter(r -> r.Age_Yrs >= 12, dx)
 
     # Restrict to data close to the target ages
-    dx1 = filter(r -> abs(r.Age_Yrs - age1) <= 1.5, dx1)
-    dx2 = filter(r -> abs(r.Age_Yrs - age2) <= 1.5, dx2)
+    dx1 = filter(r -> abs(r.Age_Yrs - age1) <= child_age_caliper, dx1)
+    dx2 = filter(r -> abs(r.Age_Yrs - age2) <= adult_age_caliper, dx2)
 
-    # Restrict based on calipers for other variables
+    # Restrict based on non-missingness and place calipers on other variables
     dx1 = restrict(dx1, vl1)
     dx2 = restrict(dx2, vl2)
+
+    # Outcome is needed for adults
+    dx2 = filter(r -> !ismissing(r[outcome]), dx2)
 
     ix1 = gpix(dx1)
     ix2 = gpix(dx2)
@@ -134,7 +140,7 @@ function gendat(
         end
     end
 
-    dr = DataFrame(:Id => idv, :Age1 => age1v, :Age2 => age2v, outcome => outv)
+    dr = DataFrame(:ID => idv, :Age1 => age1v, :Age2 => age2v, outcome => outv)
 
     # Include variables measured in childhood (childhood body size)
     for (j, c) in enumerate(vl1)

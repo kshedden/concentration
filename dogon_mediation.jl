@@ -12,18 +12,22 @@ end
 # Analyze one sex, at specific childhood and adult ages
 sex = "Female"
 age1 = 3.0
-age2 = 19.0
+age2 = 20.0
 
 # The outcome variable
 outcome = :SBP_MEAN
 
 # Childhood body size variable (primary exposure)
 # Possibilities: Ht_Ave_Use, WT, HAZ, WAZ
-cbs = :HAZ
+cbs = :BMI
 
 # Mediators
 med1 = :Ht_Ave_Use
 med2 = :BMI
+
+# Calipers for child and adult age
+child_age_caliper = 1.5
+adult_age_caliper = 1.5
 
 # Number of quantile points to track
 m = 5
@@ -40,6 +44,7 @@ vla = [vspec(med1, missing, Inf), vspec(med2, missing, Inf)]
 bw = fill(1.0, 5)
 
 qrm = mediation_prep(
+    df,
     outcome,
     cbs,
     med1,
@@ -52,6 +57,8 @@ qrm = mediation_prep(
     vla,
     bw;
     single = false,
+    child_age_caliper = child_age_caliper,
+    adult_age_caliper = adult_age_caliper,
 )
 
 mr = mediation(qrm)
