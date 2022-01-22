@@ -112,7 +112,7 @@ end
 
 # Construct a structure that can be used to perform quantile regression
 # of y on x.  k is the number of nearest neighbors used for regularization.
-function qreg_nn(y::Array{Float64}, x::Array{Float64,2}; k::Int = 5)::Qreg
+function qreg_nn(y::Vector{Float64}, x::Matrix{Float64}; k::Int = 5)::Qreg
 
     n = length(y)
 
@@ -147,7 +147,6 @@ function qreg_nn(y::Array{Float64}, x::Array{Float64,2}; k::Int = 5)::Qreg
     end
 
     return Qreg(y, x, nn, kt, model, Array{Float64,1}(), -1, rpos, rneg, dcap, rfit)
-
 end
 
 

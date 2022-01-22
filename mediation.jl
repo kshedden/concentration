@@ -65,7 +65,6 @@ function mediation_quantiles(yv, xm, pg, exq, m1q, m2q, bw)
 
     # Estimate the pg[j]'th quantile of y given the covariates.
     for j = 1:m
-
         _ = fit(qr, pg[j], 0.1) # important tuning parameter here
 
         for i1 = 1:m # Exposure
@@ -99,8 +98,8 @@ function mediation_prep(
     vla,
     bw;
     single = false,
-    child_age_caliper = child_age_caliper,
-    adult_age_caliper = adult_age_caliper,
+    child_age_caliper = 1.5,
+    adult_age_caliper = 3,
 )
 
     # Probability points
@@ -130,9 +129,9 @@ function mediation_prep(
     gm2 = x -> (x - xmn[5]) / xsd[5]
 
     # Marginal quantiles for all variables of interest at the target ages
-    cq = marg_qnt(cbs, age1, sex).(pg)
-    hq = marg_qnt(med1, age2, sex).(pg)
-    bq = marg_qnt(med2, age2, sex).(pg)
+    cq = marg_qnt(cbs, age1, sex, df).(pg)
+    hq = marg_qnt(med1, age2, sex, df).(pg)
+    bq = marg_qnt(med2, age2, sex, df).(pg)
 
     # Z-scores of the marginal quantiles
     zcq = gex.(cq)

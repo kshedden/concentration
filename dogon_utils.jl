@@ -1,5 +1,7 @@
 using DataFrames, Printf
 
+include("qreg_nn.jl")
+
 # Specify a variable to match on
 mutable struct vspec
 
@@ -193,6 +195,7 @@ function marg_qnt(
     trait::Symbol,
     age::Float64,
     sex::String,
+    df::AbstractDataFrame,
     la::Float64 = 1.0,
     bw::Float64 = 1.0,
 )
@@ -201,10 +204,10 @@ function marg_qnt(
     dx = dx[completecases(dx), :]
     dx = filter(r -> r.Sex == sex, dx)
 
-    y = Array{Float64,1}(dx[:, trait])
-    x = Array{Float64,1}(dx[:, :Age_Yrs])[:, :]
-    qr = qreg_nn(y, x)
+    y = Vector{Float64}(dx[:, trait])
+    x = Vector{Float64}(dx[:, :Age_Yrs])[:, :]
 
+    qr = qreg_nn(y, x)
     f = function (p::Float64)
         _ = fit(qr, p, la)
         return predict_smooth(qr, [age], [bw])
