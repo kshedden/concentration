@@ -1,4 +1,4 @@
-using Distributions, Printf
+using Distributions, Printf, Combinatorics
 
 include("functional_lr.jl")
 
@@ -60,14 +60,44 @@ function check_getfitresid()
 
 end
 
-# This test is stochastic, but if the noise
-# parameter is small it almost always passes.
+# Make sure that the starting values are permutation-invariant.
+function check_get_start_perm()
+
+    Random.seed!(3942)
+
+    p = 11  # Number of grid points
+    q = 3   # Number of covariates
+    s = 1.0 # Additive noise
+
+    # Rank of the tensor
+    r = q + 1
+
+    x, u, v = gen_tensor(p, r, s)
+    uh1, vh1 = nothing, nothing
+
+    for ii in permutations([1:q]...)
+
+        # Permute the first q axes of x.
+        jj = copy(ii)
+        push!(jj, r)
+        xx = permutedims(x, jj)
+
+        uh, vh = get_start(xx)
+        if isnothing(uh1)
+            uh1, vh1 = uh, vh
+        else
+            @assert maximum(abs.(uh - uh1[:, ii])) < 1e-8
+            @assert maximum(abs.(vh - vh1[:, ii])) < 1e-8
+        end
+    end
+end
+
 function check_get_start()
 
     Random.seed!(3942)
 
-    p = 11 # Number of grid points
-    q = 3 # Number of covariates
+    p = 11   # Number of grid points
+    q = 3    # Number of covariates
     s = 0.01 # Additive noise
 
     # Rank of the tensor
@@ -89,7 +119,6 @@ function check_get_start()
             end
         end
     end
-
 end
 
 function check_grad_tensor_helper(; p = 10, r = 4, s = 1.0, e = 1e-6, pu = 10.0, pv = 10.0)
@@ -154,6 +183,43 @@ function check_grad_tensor()
     println("Failed $(nfail) out of $(nfail + npass) gradient checks")
 end
 
+function check_fit_tensor_perm(; p = 10, r = 4, s = 1.0)
+
+    Random.seed!(3942)
+
+    s = 0.5
+
+    # Number of covariates
+    q = r - 1
+
+    x, u, v = gen_tensor(p, r, s)
+
+    # All parameters flattened
+    pa = vcat(u[:], v[:])
+
+    uh1, vh1 = nothing, nothing
+    c = 0.0
+    cu = c * ones(q)
+    cv = c * ones(q)
+
+    for ii in permutations([1:q]...)
+
+        # Permute the first q axes of x.
+        jj = copy(ii)
+        push!(jj, r)
+        xx = permutedims(x, jj)
+
+        uh, vh = fit_flr_tensor(xx, cu, cv)
+        if isnothing(uh1)
+            uh1, vh1 = uh, vh
+        else
+            @assert maximum(abs.(uh - uh1[:, ii])) < 1e-4
+            @assert maximum(abs.(vh - vh1[:, ii])) < 1e-4
+        end
+    end
+end
+
+
 function check_fit_tensor(; p = 10, r = 4, s = 1.0)
 
     s = 0.5
@@ -166,10 +232,11 @@ function check_fit_tensor(; p = 10, r = 4, s = 1.0)
     # All parameters flattened
     pa = vcat(u[:], v[:])
 
+    cu = c * ones(q)
+    cv = c * ones(q)
+
     # Increasing levels of regularization
-    for c in [100, 10000]
-        cu = c * ones(q)
-        cv = c * ones(q)
+    for c in [0, 100, 10000]
         uh, vh = fit_flr_tensor(x, cu, cv)
 
         for j = 1:q
@@ -183,6 +250,7 @@ end
 
 function check_exact()
 
+    # This tensor has an exact low-rank structure
     m = 11
     pg = collect(range(1 / m, 1 - 1 / m, length = m))
     xr = zeros(m, m, m, m)
@@ -215,7 +283,9 @@ end
 check_exact()
 check_getfitresid()
 check_get_start()
+check_get_start_perm()
 
 # Slow tests
 check_grad_tensor()
+check_fit_tensor_perm()
 check_fit_tensor()

@@ -82,13 +82,12 @@ end
 # Return the objective function and corresponding gradient functions
 # that are used to fit the low rank model.
 function _flr_fungrad_tensor(
-    x::Array{Float64,1},
+    x::Vector{Float64},
     p::Int,
     r::Int,
-    cu::Array{Float64,1},
-    cv::Array{Float64,1},
+    cu::Vector{Float64},
+    cv::Vector{Float64},
 )
-
     @assert length(x) == p^r
 
     # The number of covariates
@@ -109,7 +108,7 @@ function _flr_fungrad_tensor(
     w2 = w' * w
 
     # The fitting function (sum of squared residuals).
-    f = function (z::Array{Float64,1})
+    f = function (z::Vector{Float64})
 
         u, v = _split(z, p, q)
         getfitresid(u, v, xr, ft, rs)
@@ -127,7 +126,7 @@ function _flr_fungrad_tensor(
     end
 
     # The gradient of the fitting function
-    g! = function (G, z; project = true)
+    g! = function (G, z; project = false)
 
         # Split the parameters
         u, v = _split(z, p, q)
@@ -174,7 +173,6 @@ function _flr_fungrad_tensor(
             proj = zeros(size(u, 1), 2)
 
             for j = 1:q
-
                 if constraint_type == 1
                     f = sum(abs2, v[:, j])
                     vg[:, j] .-= dot(vg[:, j], v[:, j]) * v[:, j] / f
@@ -185,13 +183,11 @@ function _flr_fungrad_tensor(
                     u_, _, _ = svd(proj)
                     ug[:, j] .-= u_ * (u_' * ug[:, j])
                 end
-
             end
         end
     end
 
     return tuple(f, g!)
-
 end
 
 # Use a series of SVD's to obtain starting values for the model parameters.
@@ -202,7 +198,8 @@ function get_start(xr::AbstractArray)::Tuple{AbstractArray,AbstractArray}
 
     sx = size(xr)
     r = length(sx)
-    p = sx[1] # All axes assumed to have the same length
+    @assert minimum(sx) == maximum(sx) # All axes must have the same length
+    p = first(sx)
     q = r - 1
     u = zeros(p, q)
     v = zeros(p, q)
@@ -239,8 +236,8 @@ end
 # of a tensor with r axes, each having length p.
 function fit_flr_tensor(
     x::AbstractArray,
-    cu::Array{Float64,1},
-    cv::Array{Float64,1};
+    cu::Vector{Float64},
+    cv::Vector{Float64};
     start = nothing,
 )
     r = length(size(x))
@@ -263,7 +260,8 @@ function fit_flr_tensor(
 
     f, g! = _flr_fungrad_tensor(vx, p, r, cu, cv)
 
-    r = optimize(f, g!, pa, LBFGS(), Optim.Options(iterations = 50, show_trace = true))
+    opt = Optim.Options(iterations = 500, show_trace = true)
+    r = optimize(f, g!, pa, LBFGS(), opt)
     println(r)
 
     if !Optim.converged(r)

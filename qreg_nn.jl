@@ -14,10 +14,10 @@ using MathOptInterface
 mutable struct Qreg
 
     # The outcome variable
-    y::Array{Float64,1}
+    y::Vector{Float64}
 
     # The covariates used to define the nearest neighbors
-    x::Array{Float64,2}
+    x::Matrix{Float64}
 
     # Indices of the nearest neighbors
     nn::Array{Int,2}
