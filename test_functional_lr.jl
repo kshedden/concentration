@@ -232,11 +232,10 @@ function check_fit_tensor(; p = 10, r = 4, s = 1.0)
     # All parameters flattened
     pa = vcat(u[:], v[:])
 
-    cu = c * ones(q)
-    cv = c * ones(q)
-
     # Increasing levels of regularization
     for c in [0, 100, 10000]
+        cu = c * ones(q)
+        cv = c * ones(q)
         uh, vh = fit_flr_tensor(x, cu, cv)
 
         for j = 1:q
@@ -287,5 +286,5 @@ check_get_start_perm()
 
 # Slow tests
 check_grad_tensor()
-check_fit_tensor_perm()
 check_fit_tensor()
+check_fit_tensor_perm()

@@ -261,7 +261,7 @@ function fit_flr_tensor(
     f, g! = _flr_fungrad_tensor(vx, p, r, cu, cv)
 
     opt = Optim.Options(iterations = 500, show_trace = true)
-    r = optimize(f, g!, pa, LBFGS(), opt)
+    r = optimize(f, g!, pa, BFGS(linesearch=Optim.LineSearches.BackTracking()), opt)
     println(r)
 
     if !Optim.converged(r)
