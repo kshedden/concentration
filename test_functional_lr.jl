@@ -149,7 +149,7 @@ function check_grad_tensor_helper(; p = 10, r = 4, s = 1.0, e = 1e-6, pu = 10.0,
 
     # Get the analytic gradient
     ag = zeros(length(pa))
-    g!(ag, pa, project = false)
+    g!(ag, pa)
 
     return maximum(abs.((ag - ng) ./ abs.(ng)))
 end
@@ -239,6 +239,7 @@ function check_fit_tensor(; p = 10, r = 4, s = 1.0)
         uh, vh = fit_flr_tensor(x, cu, cv)
 
         for j = 1:q
+			@assert abs(norm(vh[:, j]) - 1) < 1e-6
             m1 = u[:, j] * v[:, j]'
             m2 = uh[:, j] * vh[:, j]'
             plt = scatterplot(vec(m1), vec(m2))

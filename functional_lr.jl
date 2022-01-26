@@ -126,7 +126,7 @@ function _flr_fungrad_tensor(
     end
 
     # The gradient of the fitting function
-    g! = function (G, z; project = false)
+    g! = function (G, z)
 
         # Split the parameters
         u, v = _split(z, p, q)
@@ -159,32 +159,10 @@ function _flr_fungrad_tensor(
             end
         end
 
-        # The problem has two constraints: each column of u is normalized to unit
-        # length, and all but the first column of u are centered.  If projecting,
-        # the linearized versions of these constraints are removed from the gradient.
-        if project
-
-            # Types of constraints
-            # 1 = u sums to 0 and v has unit norm
-            # 2 = u sums to 0 and u has unit norm
-            constraint_type = 2
-
-            # Use this only if constraint_type = 2
-            proj = zeros(size(u, 1), 2)
-
-            for j = 1:q
-                if constraint_type == 1
-                    f = sum(abs2, v[:, j])
-                    vg[:, j] .-= dot(vg[:, j], v[:, j]) * v[:, j] / f
-                    ug[:, j] .-= mean(ug[:, j])
-                else
-                    proj[:, 1] .= 1
-                    proj[:, 2] .= u[:, j]
-                    u_, _, _ = svd(proj)
-                    ug[:, j] .-= u_ * (u_' * ug[:, j])
-                end
-            end
-        end
+		# Project so that each column of u is centered
+		for j in 1:size(u, 2)
+			u[:, j] .-= mean(u[:, j])
+		end
     end
 
     return tuple(f, g!)
@@ -227,7 +205,9 @@ function get_start(xr::AbstractArray)::Tuple{AbstractArray,AbstractArray}
 
     end
 
-    u[div(p, 2)+1, :] .= 0
+	for j in 1:size(u, 2)
+		u[:, j] .-= mean(u[:, j])
+	end
 
     return u, v
 end
