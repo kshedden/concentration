@@ -223,14 +223,15 @@ function _flr_fungrad_tensor(
         if project
             oo = ones(p)
             ct = I(p) - oo * oo' / p
-            for j1 = 1:2*q
-                for j2 = 1:2*q
+            for j1 = 1:q
+                for j2 = 1:q
                     i1 = (j1 - 1) * p
                     i2 = (j2 - 1) * p
                     H[i1+1:i1+p, i2+1:i2+p] = ct * H[i1+1:i1+p, i2+1:i2+p] * ct
                 end
             end
         end
+        H .= (H + H') / 2
     end
 
     return tuple(f, g!, hess!)
@@ -329,23 +330,30 @@ function fit_flr_tensor(
     )
 
     # Conjugate gradient
-    opt = Optim.Options(iterations = 10, show_trace = true)
     pa = Optim.minimizer(r)
+    opt = Optim.Options(iterations = 2*length(pa), show_trace = true)
     r = optimize(f, g!, pa, LBFGS(linesearch = Optim.LineSearches.BackTracking()), opt)
+    pa = Optim.minimizer(r)
+	hessigrad(pa)
 
     # Newton
-    pa = Optim.minimizer(r)
     pax = copy(pa) # Save in case Newton fails
     hess = zeros(length(pa), length(pa))
     grad = zeros(length(pa))
     success = false
     f0, f1 = f(pa), nothing
+    println(f0)
     for k = 1:100
         g!(grad, pa; project = true)
         hess!(hess, pa; project = true)
+        println(maximum(abs, hess - hess'))
+        s,_ = eigen(hess)
+        println(sum(s .< 0))
         delta = pinv(hess) * grad # The Newton step
         pa .-= delta
         f1 = f(pa)
+        println(f1, " ", norm(grad), " ", norm(delta), " ",
+                sum(s .< 0))
         ndelta = norm(delta)
         if ndelta < 1e-7
             success = true
