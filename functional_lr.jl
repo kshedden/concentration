@@ -346,9 +346,7 @@ function fit_flr_tensor(
     for k = 1:100
         g!(grad, pa; project = true)
         hess!(hess, pa; project = true)
-        println(maximum(abs, hess - hess'))
         s,_ = eigen(hess)
-        println(sum(s .< 0))
         delta = pinv(hess) * grad # The Newton step
         pa .-= delta
         f1 = f(pa)
