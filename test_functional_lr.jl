@@ -121,7 +121,7 @@ function check_get_start()
     end
 end
 
-function check_grad_tensor_helper(; p = 10, r = 4, s = 1.0, e = 1e-6, pu = 10.0, pv = 10.0)
+function check_grad_numeric_helper(; p = 10, r = 4, s = 1.0, e = 1e-6, pu = 10.0, pv = 10.0)
 
     x, u, v = gen_tensor(p, r, s)
 
@@ -149,12 +149,49 @@ function check_grad_tensor_helper(; p = 10, r = 4, s = 1.0, e = 1e-6, pu = 10.0,
 
     # Get the analytic gradient
     ag = zeros(length(pa))
-    g!(ag, pa)
+    g!(ag, pa; project = false)
 
     return maximum(abs.((ag - ng) ./ abs.(ng)))
 end
 
-function check_grad_tensor()
+function check_hess_numeric_helper(; p = 10, r = 4, s = 1.0, e = 1e-6, pu = 10.0, pv = 10.0)
+
+    x, u, v = gen_tensor(p, r, s)
+
+    di = p * ones(Int, r)
+    q = r - 1
+    cu = 0 * pu * ones(q) # DEBUG
+    cv = 0 * pv * ones(q)
+
+    f, g!, hess! = _flr_fungrad_tensor(x[:], p, r, cu, cv)
+
+    # Test the Hessian at this point
+    u0 = u + randn(p, q)
+    v0 = v + randn(p, q)
+
+    # Get the numerical Hessian
+    pa = vcat(u0[:], v0[:])
+    ag0 = zeros(length(pa))
+    g!(ag0, pa; project = false)
+    nh = zeros(length(pa), length(pa))
+    ag = zeros(length(pa))
+    for i in eachindex(pa)
+        pa[i] += e
+        g!(ag, pa; project = false)
+        nh[i, :] = (ag - ag0) / e
+        pa[i] -= e
+    end
+    nh = (nh + nh') / 2
+
+    # Get the analytic Hessian
+    ah = zeros(length(pa), length(pa))
+    hess!(ah, pa; project = false)
+
+    return (ah, nh)
+end
+
+
+function check_grad_numeric()
 
     Random.seed!(3942)
 
@@ -162,7 +199,7 @@ function check_grad_tensor()
     for r in [2, 4]
         for pe in [0.0, 5.0, 20.0]
             for j = 1:5
-                d = check_grad_tensor_helper(
+                d = check_grad_numeric_helper(
                     p = 10,
                     r = r,
                     s = 1.0,
@@ -181,6 +218,35 @@ function check_grad_tensor()
     end
 
     println("Failed $(nfail) out of $(nfail + npass) gradient checks")
+end
+
+function check_hess_numeric()
+
+    Random.seed!(3942)
+
+    npass, nfail = 0, 0
+    for r in [2, 4]
+        for pe in [0.0, 5.0, 20.0]
+            for j = 1:5
+                ah, nh = check_hess_numeric_helper(
+                    p = 10,
+                    r = r,
+                    s = 1.0,
+                    e = 1e-5,
+                    pu = pe,
+                    pv = pe,
+                )
+                if any(abs.(nh - ah) .> 1e-5 .+ (1 + 1e-5) * abs.(nh))
+                    println("Failed: d=$(d), r=$(r), pe=$(pe), j=$(j)")
+                    nfail += 1
+                else
+                    npass += 1
+                end
+            end
+        end
+    end
+
+    println("Failed $(nfail) out of $(nfail + npass) Hessian checks")
 end
 
 function check_fit_tensor_perm(; p = 10, r = 4, s = 1.0)
@@ -239,7 +305,7 @@ function check_fit_tensor(; p = 10, r = 4, s = 1.0)
         uh, vh = fit_flr_tensor(x, cu, cv)
 
         for j = 1:q
-			@assert abs(norm(vh[:, j]) - 1) < 1e-6
+            @assert abs(norm(vh[:, j]) - 1) < 1e-6
             m1 = u[:, j] * v[:, j]'
             m2 = uh[:, j] * vh[:, j]'
             plt = scatterplot(vec(m1), vec(m2))
@@ -286,6 +352,7 @@ check_get_start()
 check_get_start_perm()
 
 # Slow tests
-check_grad_tensor()
+check_grad_numeric()
+check_hess_numeric()
 check_fit_tensor()
 check_fit_tensor_perm()

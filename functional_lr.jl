@@ -80,7 +80,8 @@ function getfit(u::AbstractArray, v::AbstractArray)
 end
 
 # Return the objective function and corresponding gradient functions
-# that are used to fit the low rank model.
+# that are used to fit the low rank model.  The data 'x' are a 
+# vectorized tensor with 'r' axes and 'p' values along each axis. 
 function _flr_fungrad_tensor(
     x::Vector{Float64},
     p::Int,
@@ -118,19 +119,21 @@ function _flr_fungrad_tensor(
 
         # Penalty terms
         for j = 1:q
-            rv += cu[j] * sum(abs2, w * u[:, j]) / sum(abs2, u[:, j])
-            rv += cv[j] * sum(abs2, w * v[:, j]) / sum(abs2, v[:, j])
+            # DEBUG
+            #rv += cu[j] * sum(abs2, w * u[:, j]) / sum(abs2, u[:, j])
+            #rv += cv[j] * sum(abs2, w * v[:, j]) / sum(abs2, v[:, j])
+            rv += cu[j] * sum(abs2, w * u[:, j])
+            rv += cv[j] * sum(abs2, w * v[:, j])
         end
 
         return rv
     end
 
     # The gradient of the fitting function
-    g! = function (G, z)
+    g! = function (G, z; project = true)
 
         # Split the parameters
         u, v = _split(z, p, q)
-
         getfitresid(u, v, xr, ft, rs)
 
         # Sum of squared residuals
@@ -142,12 +145,15 @@ function _flr_fungrad_tensor(
 
         # Penalty gradients
         for j = 1:q
-            ssu = sum(abs2, u[:, j])
-            nu = sum(abs2, w * u[:, j])
-            ssv = sum(abs2, v[:, j])
-            nv = sum(abs2, w * v[:, j])
-            ug[:, j] = 2 .* cu[j] .* (ssu .* w2 * u[:, j] - nu .* u[:, j]) ./ ssu^2
-            vg[:, j] = 2 .* cv[j] .* (ssv .* w2 * v[:, j] - nv .* v[:, j]) ./ ssv^2
+            # DEBUG
+            #ssu = sum(abs2, u[:, j])
+            #nu = sum(abs2, w * u[:, j])
+            #ssv = sum(abs2, v[:, j])
+            #nv = sum(abs2, w * v[:, j])
+            #ug[:, j] = 2 .* cu[j] .* (ssu .* w2 * u[:, j] - nu .* u[:, j]) ./ ssu^2
+            #vg[:, j] = 2 .* cv[j] .* (ssv .* w2 * v[:, j] - nv .* v[:, j]) ./ ssv^2
+            ug[:, j] = 2 .* cu[j] .* w2 * u[:, j]
+            vg[:, j] = 2 .* cv[j] .* w2 * v[:, j]
         end
 
         # Loss gradient
@@ -159,13 +165,75 @@ function _flr_fungrad_tensor(
             end
         end
 
-		# Project so that each column of u is centered
-		for j in 1:size(u, 2)
-			u[:, j] .-= mean(u[:, j])
-		end
+        # Project so that each column of the gradient of u is centered
+        if project
+            for j = 1:size(ug, 2)
+                ug[:, j] .-= mean(ug[:, j])
+            end
+        end
     end
 
-    return tuple(f, g!)
+    hess! = function (H, z; project = true)
+
+        u, v = _split(z, p, q)
+        getfitresid(u, v, xr, ft, rs)
+        H .= 0
+
+        for ii in product(Iterators.repeated(1:p, r)...)
+
+            # Update the u x u Hessian terms for the loss function
+            for k1 = 1:q
+                for k2 = 1:q
+                    j1 = (k1 - 1) * p + ii[k1]
+                    j2 = (k2 - 1) * p + ii[k2]
+                    H[j1, j2] += 2 * v[ii[end], k1] * v[ii[end], k2]
+                end
+            end
+
+            # Update the v x v Hessian terms for the loss function
+            for k1 = 1:q
+                for k2 = 1:q
+                    j1 = p * q + (k1 - 1) * p + ii[end]
+                    j2 = p * q + (k2 - 1) * p + ii[end]
+                    H[j1, j2] += 2 * u[ii[k1], k1] * u[ii[k2], k2]
+                end
+            end
+
+            # Update the u x v Hessian terms for the loss function
+            for k1 = 1:q
+                for k2 = 1:q
+                    f = k1 == k2 ? rs[ii...] : 0
+                    f -= u[ii[k2], k2] * v[ii[end], k1]
+                    j1 = (k1 - 1) * p + ii[k1]
+                    j2 = p * q + (k2 - 1) * p + ii[end]
+                    H[j1, j2] -= 2 * f
+                    H[j2, j1] -= 2 * f
+                end
+            end
+        end
+
+        # Update for the penalty function
+        for j = 1:q
+            j1 = (j - 1) * p
+            H[j1+1:j1+p, j1+1:j1+p] += 2 * cu[j] * w2
+            j1 += p * q
+            H[j1+1:j1+p, j1+1:j1+p] += 2 * cv[j] * w2
+        end
+
+        if project
+            oo = ones(p)
+            ct = I(p) - oo * oo' / p
+            for j1 = 1:2*q
+                for j2 = 1:2*q
+                    i1 = (j1 - 1) * p
+                    i2 = (j2 - 1) * p
+                    H[i1+1:i1+p, i2+1:i2+p] = ct * H[i1+1:i1+p, i2+1:i2+p] * ct
+                end
+            end
+        end
+    end
+
+    return tuple(f, g!, hess!)
 end
 
 # Use a series of SVD's to obtain starting values for the model parameters.
@@ -205,9 +273,9 @@ function get_start(xr::AbstractArray)::Tuple{AbstractArray,AbstractArray}
 
     end
 
-	for j in 1:size(u, 2)
-		u[:, j] .-= mean(u[:, j])
-	end
+    for j = 1:size(u, 2)
+        u[:, j] .-= mean(u[:, j])
+    end
 
     return u, v
 end
@@ -238,13 +306,60 @@ function fit_flr_tensor(
 
     pa = vcat(u[:], v[:])
 
-    f, g! = _flr_fungrad_tensor(vx, p, r, cu, cv)
+    f, g!, hess! = _flr_fungrad_tensor(vx, p, r, cu, cv)
 
-    opt = Optim.Options(iterations = 500, show_trace = true)
-    r = optimize(f, g!, pa, BFGS(linesearch=Optim.LineSearches.BackTracking()), opt)
-    println(r)
+    # Calculate the norm of the Newton step hess^-1 * grad
+    # Not currently used
+    hessigrad = function (pa)
+        grad = zeros(length(pa))
+        g!(grad, pa; project = false)
+        H = zeros(length(pa), length(pa))
+        hess!(H, pa; project = false)
+        println(f(pa), " ", norm(grad), " ", norm(pinv(H) * grad))
+    end
 
-    if !Optim.converged(r)
+    # Gradient descent
+    opt = Optim.Options(iterations = 10, show_trace = true)
+    r = optimize(
+        f,
+        g!,
+        pa,
+        GradientDescent(linesearch = Optim.LineSearches.BackTracking()),
+        opt,
+    )
+
+    # Conjugate gradient
+    opt = Optim.Options(iterations = 10, show_trace = true)
+    pa = Optim.minimizer(r)
+    r = optimize(f, g!, pa, LBFGS(linesearch = Optim.LineSearches.BackTracking()), opt)
+
+    # Newton
+    pa = Optim.minimizer(r)
+    pax = copy(pa) # Save in case Newton fails
+    hess = zeros(length(pa), length(pa))
+    grad = zeros(length(pa))
+    success = false
+    f0, f1 = f(pa), nothing
+    for k = 1:100
+        g!(grad, pa; project = true)
+        hess!(hess, pa; project = true)
+        delta = pinv(hess) * grad # The Newton step
+        pa .-= delta
+        f1 = f(pa)
+        ndelta = norm(delta)
+        if ndelta < 1e-7
+            success = true
+            break
+        end
+    end
+
+    if f1 > f0
+        # Newton went uphill, use CG solution
+        println("warning: Newton optimization failed")
+        pa = pax
+    end
+
+    if !success
         println("fit_flr_tensor did not converge")
     end
 

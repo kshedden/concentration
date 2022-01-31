@@ -11,7 +11,7 @@ end
 # Control parameters
 maxiter = 10 #500
 maxiter_gd = 10 #50
-skip_se = true
+skip_se = false
 
 # Variables to analyze
 m1var = :Ht_Ave_Use
@@ -406,6 +406,15 @@ function emulate_chain(pma, nb, sex)
     return dm
 end
 
+function summary_table(pma, fname)
+    out = open(fname, "w")
+    for px in pma
+        s = string(coeftable(px))
+        write(out, s)
+    end
+    close(out)
+end
+
 function main(ifg, sex)
     pma = []
     nb = 5
@@ -430,6 +439,8 @@ function main(ifg, sex)
     # distribution as conditioning variables.
     em = [emulate_chain(pma, nb, sex) for _ = 1:10]
     ifg = plot_chained(pma, em, sex, ifg)
+
+    summary_table(pma, "procmodels_$(sex).txt")
 
     return ifg, pma
 end
