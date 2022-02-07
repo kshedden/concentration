@@ -331,10 +331,10 @@ function fit_flr_tensor(
 
     # Conjugate gradient
     pa = Optim.minimizer(r)
-    opt = Optim.Options(iterations = 2*length(pa), show_trace = true)
+    opt = Optim.Options(iterations = 2 * length(pa), show_trace = true)
     r = optimize(f, g!, pa, LBFGS(linesearch = Optim.LineSearches.BackTracking()), opt)
     pa = Optim.minimizer(r)
-	hessigrad(pa)
+    hessigrad(pa)
 
     # Newton
     pax = copy(pa) # Save in case Newton fails
@@ -346,12 +346,11 @@ function fit_flr_tensor(
     for k = 1:100
         g!(grad, pa; project = true)
         hess!(hess, pa; project = true)
-        s,_ = eigen(hess)
+        s, _ = eigen(hess)
         delta = pinv(hess) * grad # The Newton step
         pa .-= delta
         f1 = f(pa)
-        println(f1, " ", norm(grad), " ", norm(delta), " ",
-                sum(s .< 0))
+        println(f1, " ", norm(grad), " ", norm(delta), " ", sum(s .< 0))
         ndelta = norm(delta)
         if ndelta < 1e-7
             success = true

@@ -1,6 +1,6 @@
 using Distributions, Printf, Combinatorics
 
-include("functional_lr.jl")
+include("flr_tensor.jl")
 
 # Simulate data for testing.  The data are a tensor with r
 # axes, each with length p.  The additive Gaussian error has
@@ -114,7 +114,7 @@ function check_get_start()
             m1 = u[:, j] * v[:, j]'
             m2 = uh[:, j] * vh[:, j]'
             cr = cor(vec(m1), vec(m2))
-            if cr < 0.95
+            if cr < 0.9
                 error(@sprintf("cor(vec(m1), vec(m2)) = %f < 0.95", cr))
             end
         end
