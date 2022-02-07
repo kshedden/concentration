@@ -310,7 +310,6 @@ function fit_flr_tensor(
     f, g!, hess! = _flr_fungrad_tensor(vx, p, r, cu, cv)
 
     # Calculate the norm of the Newton step hess^-1 * grad
-    # Not currently used
     hessigrad = function (pa)
         grad = zeros(length(pa))
         g!(grad, pa; project = false)
@@ -358,17 +357,17 @@ function fit_flr_tensor(
         end
     end
 
-    if f1 > f0
-        # Newton went uphill, use CG solution
-        println("warning: Newton optimization failed")
-        pa = pax
-    end
-
     if !success
         println("fit_flr_tensor did not converge")
     end
 
-    z = Optim.minimizer(r)
+    z = if f1 > f0
+            # Newton went uphill, use CG solution
+            println("warning: Newton optimization failed")
+            pax
+        else
+            pa
+        end
     uh, vh = _split(z, p, q)
 
     # Normalize the representation.  There are various ways to do this,
