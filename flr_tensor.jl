@@ -281,20 +281,27 @@ function get_start(xr::AbstractArray)::Tuple{AbstractArray,AbstractArray}
     return u, v
 end
 
-# Fit a functional low-rank model to the tensor x.  The input data x is a flattened representation
-# of a tensor with r axes, each having length p.
+# Fit a functional low-rank model to the tensor x.  The input data x is
+# a tensor with r axes, each having length p.
 function fit_flr_tensor(
     x::AbstractArray,
-    cu::Vector{Float64},
-    cv::Vector{Float64};
+    cu::AbstractVector,
+    cv::AbstractVector;
     start = nothing,
 )
+    # Number of axes
     r = length(size(x))
+
+    # Size of each axis
     p = size(x)[1]
-    vx = vec(x)
+    @assert size(x) .== p
 
     # Number of covariates
     q = r - 1
+
+    vx = vec(x)
+    @assert length(cu) == r - 1
+    @assert length(cv) == r - 1
 
     # Starting values
     if !isnothing(start)
@@ -362,12 +369,12 @@ function fit_flr_tensor(
     end
 
     z = if f1 > f0
-            # Newton went uphill, use CG solution
-            println("warning: Newton optimization failed")
-            pax
-        else
-            pa
-        end
+        # Newton went uphill, use CG solution
+        println("warning: Newton optimization failed")
+        pax
+    else
+        pa
+    end
     uh, vh = _split(z, p, q)
 
     # Normalize the representation.  There are various ways to do this,

@@ -9,15 +9,15 @@
 # import pandas as pd
 # for x in ("DEMO", "BPX", "BMX"): pd.read_sas("%s_I.XPT" % x).to_csv("%s_I.csv.gz" % x, index=None)
 
-using DataFrames, CSV, GZip, Printf, UnicodePlots, LinearAlgebra
+using DataFrames, CSV, CodecZlib, Printf, UnicodePlots, LinearAlgebra
 
 include("qreg_nn.jl")
-include("functional_lr.jl")
+include("flr_tensor.jl")
 
 dx = []
 for x in ["DEMO", "BPX", "BMX"]
-    d = GZip.open(@sprintf("%s_I.csv.gz", x)) do io
-        CSV.read(io, DataFrame)
+    d = open(@sprintf("%s_I.csv.gz", x)) do io
+        CSV.read(GzipDecompressorStream(io), DataFrame)
     end
     push!(dx, d)
 end
@@ -100,12 +100,12 @@ for sex in ["female", "male"]
         bmi_x = bmi_m_x
     end
 
-    y = Array{Float64,1}(dx[:, :BMXBMI])
-    x = Array{Float64,1}(dx[:, :RIDAGEYR_z])[:, :]
+    y = Vector{Float64}(dx[:, :BMXBMI])
+    x = Matrix{Float64}(dx[:, :RIDAGEYR_z][:, :])
     nn0 = qreg_nn(y, x)
 
-    y = Array{Float64,1}(dx[:, :BPXSY1])
-    x = Array{Float64,2}(dx[:, [:RIDAGEYR_z, :BMXBMI_z]])
+    y = Vector{Float64}(dx[:, :BPXSY1])
+    x = Matrix{Float64}(dx[:, [:RIDAGEYR_z, :BMXBMI_z]])
     nn = qreg_nn(y, x)
 
     ages = [25.0, 50.0, 75.0]
@@ -184,10 +184,10 @@ for sex in ["female", "male"]
         end
 
         # Fit a low rank model to the quantiles
-        u, v = fit_flr(sbpc, 500.0, 5000.0)
-        p = lineplot(u, title = @sprintf("%s BMI loadings at age %.0f", sex, age))
+        u, v = fit_flr_tensor(sbpc, 500.0 * ones(2), 5000.0 * ones(2))
+        p = lineplot(u[:, 1], title = @sprintf("%s BMI loadings at age %.0f", sex, age))
         println(p)
-        p = lineplot(v, title = @sprintf("%s SBP loadings at age %.0f", sex, age))
+        p = lineplot(v[:, 1], title = @sprintf("%s SBP loadings at age %.0f", sex, age))
         println(p)
 
         # Calculate the R^2
