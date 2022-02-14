@@ -116,14 +116,16 @@ function flr_fungrad(
 )
     @assert length(X) == length(Xp) == length(cu) == length(cv)
 
-    n = size(Q, 1)
+    n, m = size(Q)
+    nm = n * m
     q = length(X)
-    m = size(Q, 2)
     d = [size(x, 2) for x in X]
     xtq = [x' * Q for x in X]
 
     # d2_u gives the second differences of Xp, by column
-    d2_u = d2grid(size(first(Xp), 1))
+	r = size(first(Xp), 1)
+	rm = r * m
+    d2_u = d2grid(r)
     wu = [d2_u * x for x in Xp]
     wu2 = [b' * b for b in wu]
     Xp2 = [x' * x for x in Xp]
@@ -136,18 +138,19 @@ function flr_fungrad(
 
         # Squared error loss
         fv, _ = getfit(X, pa)
-        f = 0.0 #sum(abs2, Q - fv) # DEBUG
+        f = sum(abs2, Q - fv) / nm
 
         # Penalty for u terms
+        f0 = f
         for j in eachindex(X)
-            f += cu[j] * sum(abs2, pa.v[:, j]) * sum(abs2, wu[j] * pa.beta[j])
+            f += cu[j] * sum(abs2, pa.v[:, j]) * sum(abs2, wu[j] * pa.beta[j]) / rm
         end
 
         # Penalty for columns of v
-        #for j = 1:size(pa.v, 2)
-        #   u = Xp[j] * pa.beta[j]
-        #   f += cv[j] * sum(abs2, u) * sum(abs2, d2v * pa.v[:, j])
-        #end
+        for j = 1:size(pa.v, 2)
+           u = Xp[j] * pa.beta[j]
+           f += cv[j] * sum(abs2, u) * sum(abs2, d2v * pa.v[:, j]) / rm
+        end
 
         return f
     end
@@ -155,41 +158,35 @@ function flr_fungrad(
     function g!(gr::Params, pa::Params; project = true)
         xb = [X[j] * pa.beta[j] for j = 1:q]
 
-        # DEBUG
-        for j = 1:q
-            gr.beta[j] .= 0
-        end
-        gr.v .= 0
-
         # Gradient for loss function
-        #for j = 1:q
-        #    gr.beta[j] .= -2 * xtq[j] * pa.v[:, j]
-        #    gr.v[:, j] .= -2 * xtq[j]' * pa.beta[j]
+        for j = 1:q
+            gr.beta[j] .= -2 * xtq[j] * pa.v[:, j] / nm
+            gr.v[:, j] .= -2 * xtq[j]' * pa.beta[j] / nm
 
-        #    for k = 1:q
-        #       if j == k
-        #           gr.beta[j] .+= 2 * sum(abs2, pa.v[:, j]) * X[j]' * xb[j]
-        #           gr.v[:, j] .+= 2 * sum(abs2, xb[j]) * pa.v[:, j]
-        #       else
-        #           c = dot(pa.v[:, j], pa.v[:, k])
-        #           gr.beta[j] .+= c * X[j]' * X[k] * pa.beta[k]
-        #           gr.v[:, j] .+= dot(xb[j], xb[k]) * pa.v[:, k]
-        #       end
-        #   end
-        #end
+            for k = 1:q
+               if j == k
+                   gr.beta[j] .+= 2 * sum(abs2, pa.v[:, j]) * X[j]' * xb[j] / nm
+                   gr.v[:, j] .+= 2 * sum(abs2, xb[j]) * pa.v[:, j] / nm
+               else
+                   c = dot(pa.v[:, j], pa.v[:, k])
+                   gr.beta[j] .+= c * X[j]' * X[k] * pa.beta[k] / nm
+                   gr.v[:, j] .+= dot(xb[j], xb[k]) * pa.v[:, k] / nm
+               end
+           end
+        end
 
         # Gradient contributions from the penalty for u terms
         for j in eachindex(X)
-            gr.beta[j] .+= 2 * cu[j] * sum(abs2, pa.v[:, j]) * wu2[j] * pa.beta[j]
-            gr.v[:, j] .+= 2 * cu[j] * sum(abs2, wu[j] * pa.beta[j]) * pa.v[:, j]
+            gr.beta[j] .+= 2 * cu[j] * sum(abs2, pa.v[:, j]) * wu2[j] * pa.beta[j] / rm
+            gr.v[:, j] .+= 2 * cu[j] * sum(abs2, wu[j] * pa.beta[j]) * pa.v[:, j] / rm
         end
 
         # Gradient contributions from the penalty for v
-        #for j = 1:q
-        #    u = Xp[j] * pa.beta[j]
-        #    gr.v[:, j] .+= 2 * cv[j] * sum(abs2, u) * d2v2 * pa.v[:, j]
-        #    gr.beta[j] .+= 2 * cv[j] * sum(abs2, d2v * pa.v[:, j]) * Xp2[j] * pa.beta[j]
-        #end
+        for j = 1:q
+            u = Xp[j] * pa.beta[j]
+            gr.v[:, j] .+= 2 * cv[j] * sum(abs2, u) * d2v2 * pa.v[:, j] / rm
+            gr.beta[j] .+= 2 * cv[j] * sum(abs2, d2v * pa.v[:, j]) * Xp2[j] * pa.beta[j] / rm
+        end
 
         # Project
         if project
