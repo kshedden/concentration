@@ -41,8 +41,12 @@ end
 
 function qnn_cca(y, xmat, npc, nperm)
 
+	xmat = copy(xmat)
+	center!(xmat)
+
     sp = []
     eta1, beta1, s1 = nothing, nothing, nothing
+	qhc1, xmat1 = nothing, nothing
     for k = 1:nperm+1
 
         # On the first iteration, analyze the actual data.
@@ -77,6 +81,7 @@ function qnn_cca(y, xmat, npc, nperm)
         if k == 1
             # Actual result
             eta1, beta1, s1 = etar1, betar1, s
+            qhc1, xmat1 = qhc, xmat
         else
             # Permuted result
             push!(sp, s)
@@ -85,7 +90,7 @@ function qnn_cca(y, xmat, npc, nperm)
 
     sp = hcat(sp...)
 
-    return (eta1, beta1, s1, sp)
+    return (eta1, beta1, qhc1, xmat1, s1, sp)
 end
 
 function center!(x)

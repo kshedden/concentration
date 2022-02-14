@@ -55,7 +55,7 @@ function main(ifig)
     for sex in [2, 1]
         println("sex=$(sex)")
         for npc in [1, 2, 3]
-            eta, beta, ss, sp = run1(sex, npc, nrand)
+            eta, beta, qhc, xmat, ss, sp = run1(sex, npc, nrand)
 
             PyPlot.clf()
             PyPlot.axes([0.13, 0.1, 0.75, 0.8])
