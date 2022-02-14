@@ -1,4 +1,5 @@
-using LinearAlgebra, Optim
+using LinearAlgebra, Printf
+using UnicodePlots
 
 #=
 Fit a low rank regression model by minimizing
@@ -38,69 +39,41 @@ of columns.
 
 'v' is a matrix with q rows and a column corresponding to
 each X_j.
+
+'val' holds the actual parameter values, 'beta' and 'v'
+are views into 'val'.
 =#
 mutable struct Params
-    beta::Vector{Vector{Float64}}
-    v::Matrix{Float64}
+    beta::Vector{AbstractArray{Float64,1}}
+    v::AbstractArray{Float64,2}
+    val::Vector{Float64}
 end
 
-#=
-Allow comparison of two 'Params' values.
-=#
-function Base.isapprox(p::Params, q::Params)::Bool
-    if length(p.beta) != length(q.beta)
-        return false
-    end
-    if size(p.v) != size(q.v)
-        return false
-    end
-    for j = 1:length(p.beta)
-        if !isapprox(p.beta[j], q.beta[j])
-            return false
-        end
-    end
-    return isapprox(p.v, q.v)
-end
+function Params(beta::Vector{T}, v::AbstractMatrix) where {T<:AbstractVector}
+    d = [length(b) for b in beta]
+    m = size(v, 1)
+    @assert size(v, 2) == length(d)
 
-#=
-Pack the parameters into a vector.
-=#
-function joinparams(pa::Params)::Vector{Float64}
-    n = sum([length(b) for b in pa.beta]) + prod(size(pa.v))
-    z = zeros(n)
+    val = zeros(sum(d) + m * length(d))
+    beta1 = Vector{SubArray{Float64,1}}()
     ii = 0
-    for v in pa.beta
-        z[ii+1:ii+length(v)] = v
-        ii += length(v)
+    for j in eachindex(d)
+        b = view(val, ii+1:ii+d[j])
+        b .= beta[j]
+        push!(beta1, b)
+        ii += d[j]
     end
-    z[ii+1:end] = vec(pa.v)
-    return z
+    v1 = view(val, ii+1:length(val))
+    v1 = reshape(v1, m, length(d))
+    v1 .= v
+    return Params(beta1, v1, val)
 end
 
 #=
-Unpack the parameters from their vectorized form.
+Copy the parameters
 =#
-function splitparams(d::Vector{Int}, m::Int, z::Vector{Float64})::Params
-    pa = Params([zeros(a) for a in d], zeros(m, length(d)))
-    ii = 0
-    for b in pa.beta
-        b .= z[ii+1:ii+length(b)]
-        ii += length(b)
-    end
-    pa.v .= reshape(z[ii+1:end], size(pa.v)...)
-    return pa
-end
-
-#=
-The model is not identified so scale each column
-of 'v' (each vector of loadings) to have unit norm.
-=#
-function normalize!(pa::Params)
-    for j in eachindex(pa.beta)
-        f = norm(pa.v[:, j])
-        pa.v[:, j] /= f
-        pa.beta[j] *= f
-    end
+function copy_params(pa::Params)::Params
+    return Params([copy(b) for b in pa.beta], copy(pa.v))
 end
 
 #=
@@ -120,7 +93,9 @@ function getfit(X::Vector{Matrix{Float64}}, pa::Params)
     return (fv, u)
 end
 
-function d2mat_grid(n)
+# Returns a n - 2 x n matrix whose rows are the second differences
+# at a sequence of offsets.
+function d2grid(n)
     b = zeros(n - 2, n)
     for i = 1:n-2
         b[i, i:i+2] = [1, -2, 1]
@@ -139,6 +114,7 @@ function flr_fungrad(
     cu::Vector{Float64},
     cv::Vector{Float64},
 )
+    @assert length(X) == length(Xp) == length(cu) == length(cv)
 
     n = size(Q, 1)
     q = length(X)
@@ -147,67 +123,81 @@ function flr_fungrad(
     xtq = [x' * Q for x in X]
 
     # d2_u gives the second differences of Xp, by column
-    d2_u = d2mat_grid(size(first(Xp), 1))
+    d2_u = d2grid(size(first(Xp), 1))
     wu = [d2_u * x for x in Xp]
     wu2 = [b' * b for b in wu]
+    Xp2 = [x' * x for x in Xp]
 
     # d2v * v gives the second differences of v (by column).
-    d2v = d2mat_grid(m)
+    d2v = d2grid(m)
     d2v2 = d2v' * d2v
 
-    function f(z::Vector{Float64})::Float64
-        pa = splitparams(d, m, z)
+    function f(pa::Params)::Float64
 
         # Squared error loss
-        fv, u = getfit(X, pa)
-        f = sum(abs2, Q - fv)
+        fv, _ = getfit(X, pa)
+        f = 0.0 #sum(abs2, Q - fv) # DEBUG
 
         # Penalty for u terms
         for j in eachindex(X)
-            f += cu[j] * sum(abs2, wu[j] * pa.beta[j])
+            f += cu[j] * sum(abs2, pa.v[:, j]) * sum(abs2, wu[j] * pa.beta[j])
         end
 
         # Penalty for columns of v
-        for j = 1:size(pa.v, 2)
-            f += cv[j] * sum(abs2, d2v * pa.v[:, j])
-        end
+        #for j = 1:size(pa.v, 2)
+        #   u = Xp[j] * pa.beta[j]
+        #   f += cv[j] * sum(abs2, u) * sum(abs2, d2v * pa.v[:, j])
+        #end
 
         return f
     end
 
-    function g!(G::Vector{Float64}, z::Vector{Float64})
-        pa = splitparams(d, m, z)
-        gr = Params([zeros(a) for a in d], zeros(m, length(d)))
-        xb = [X[j] * pa.beta[j] for j in eachindex(pa.beta)]
+    function g!(gr::Params, pa::Params; project = true)
+        xb = [X[j] * pa.beta[j] for j = 1:q]
+
+        # DEBUG
+        for j = 1:q
+            gr.beta[j] .= 0
+        end
+        gr.v .= 0
 
         # Gradient for loss function
-        for j = 1:q
-            gr.beta[j] = -2 * xtq[j] * pa.v[:, j]
-            gr.v[:, j] = -2 * xtq[j]' * pa.beta[j]
+        #for j = 1:q
+        #    gr.beta[j] .= -2 * xtq[j] * pa.v[:, j]
+        #    gr.v[:, j] .= -2 * xtq[j]' * pa.beta[j]
 
-            for k = 1:q
-                if j == k
-                    gr.beta[j] += 2 * sum(abs2, pa.v[:, j]) * X[j]' * xb[j]
-                    gr.v[:, j] += 2 * sum(abs2, xb[j]) * pa.v[:, j]
-                else
-                    c = dot(pa.v[:, j], pa.v[:, k])
-                    gr.beta[j] += c * X[j]' * X[k] * pa.beta[k]
-                    gr.v[:, j] += dot(xb[j], xb[k]) * pa.v[:, k]
-                end
+        #    for k = 1:q
+        #       if j == k
+        #           gr.beta[j] .+= 2 * sum(abs2, pa.v[:, j]) * X[j]' * xb[j]
+        #           gr.v[:, j] .+= 2 * sum(abs2, xb[j]) * pa.v[:, j]
+        #       else
+        #           c = dot(pa.v[:, j], pa.v[:, k])
+        #           gr.beta[j] .+= c * X[j]' * X[k] * pa.beta[k]
+        #           gr.v[:, j] .+= dot(xb[j], xb[k]) * pa.v[:, k]
+        #       end
+        #   end
+        #end
+
+        # Gradient contributions from the penalty for u terms
+        for j in eachindex(X)
+            gr.beta[j] .+= 2 * cu[j] * sum(abs2, pa.v[:, j]) * wu2[j] * pa.beta[j]
+            gr.v[:, j] .+= 2 * cu[j] * sum(abs2, wu[j] * pa.beta[j]) * pa.v[:, j]
+        end
+
+        # Gradient contributions from the penalty for v
+        #for j = 1:q
+        #    u = Xp[j] * pa.beta[j]
+        #    gr.v[:, j] .+= 2 * cv[j] * sum(abs2, u) * d2v2 * pa.v[:, j]
+        #    gr.beta[j] .+= 2 * cv[j] * sum(abs2, d2v * pa.v[:, j]) * Xp2[j] * pa.beta[j]
+        #end
+
+        # Project
+        if project
+            for j = 1:q
+                dd = sum(abs2, pa.v[:, j])
+                gr.v[:, j] .-= dot(gr.v[:, j], pa.v[:, j]) * pa.v[:, j] / dd
             end
         end
-
-        # Gradient for beta penalty
-        for j = 1:q
-            gr.beta[j] += 2 * cu[j] * wu2[j] * pa.beta[j]
-        end
-
-        # Gradient for beta penalty
-        for j = 1:q
-            gr.v[:, j] += 2 * cv[j] * d2v2 * pa.v[:, j]
-        end
-
-        G .= joinparams(gr)
     end
 
     return (f, g!)
@@ -217,7 +207,7 @@ end
 Get starting values by using least squares
 to obtain a fit that is not rank-restricted,
 then approximating the least squares coefficients
-with a wank one matrix.
+with a rank one matrix.
 =#
 function getstart(X, Q)::Params
 
@@ -247,7 +237,7 @@ function getstart(X, Q)::Params
         uu = u[:, 1]
         vv = s[1] * v[:, 1]
 
-        # Normalize to out standard form.
+        # Normalize
         f = norm(vv)
         vv ./= f
         uu .*= f
@@ -264,31 +254,45 @@ function fitlr(
     Xp::Vector{Matrix{Float64}},
     Q::Matrix{Float64},
     cu::Vector{Float64},
-    cv::Vector{Float64},
+    cv::Vector{Float64};
+    args...,
 )
-
     d = [size(x, 2) for x in X]
     m = size(Q, 2)
     f, g! = flr_fungrad(X, Xp, Q, cu, cv)
 
-    ps = getstart(X, Q)
-    pa = joinparams(ps)
+    p0 = getstart(X, Q)
+    grad = copy_params(p0)
 
-    # Gradient descent
-    opt = Optim.Options(iterations = 50, show_trace = false)
-    r = optimize(
-        f,
-        g!,
-        pa,
-        GradientDescent(linesearch = Optim.LineSearches.BackTracking()),
-        opt,
-    )
+    f0 = f(p0)
+    for itr = 1:1000
+        g!(grad, p0; project = true)
+        p1 = copy_params(p0)
+        step = 0.5
+        f1 = nothing
+        success = false
+        while step > 1e-18
+            p1.v = p0.v - step * grad.v
+            for j in eachindex(p0.beta)
+                p1.beta[j] = p0.beta[j] - step * grad.beta[j]
+            end
+            f1 = f(p1)
+            if f1 < f0
+                success = true
+                p0 = p1
+                f0 = f1
+                break
+            end
+            step /= 2
+        end
 
-    # Conjugate gradient may need many iterations.
-    opt = Optim.Options(iterations = 3000, show_trace = false)
-    r = optimize(f, g!, Optim.minimizer(r), BFGS(), opt)
+        if !success
+            println("Failed to find downhill step")
+            break
+        end
+    end
 
-    pa = splitparams(d, m, Optim.minimizer(r))
-    normalize!(pa)
-    return pa
+    println(@sprintf("|grad|=%f", norm(grad.val)))
+
+    return p0
 end

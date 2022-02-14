@@ -1,0 +1,218 @@
+In this chapter we explore nonparametric quantile regression as a tool
+for understanding conditional relationships between the full
+distribution of an outcome variable $y\in {\cal R}$ and one or more
+explanatory variables $x \in {\cal R}^d$.
+
+The work presented in this chapter is motivated by questions arising
+in human biology about the relationship between anthropometry (body
+size) and blood pressure.  We provide more background in ###, but
+briefly, while it is well-known that individuals who are taller and/or
+have greater body mass tend to have greater current blood pressure,
+these relationships are modified in complex ways by other factors,
+including by sex and age.  Further, when considering longitudinal
+trajectories of anthropometry variables as predictors of subsequent
+blood pressure (e.g.\ looking at anthropometry over the developmental
+span from birth to adulthood), there may be complex
+inter-relationships among anthropometry variables taken at different
+ages, and among different types of anthropometry variables (e.g.\
+height and adiposity).  Finally, factors associated with either high
+or low blood pressure may operate differently than factors associated
+with median or mean blood pressure.  This motivates our focus on
+conditional quantiles in this and the subsequent chapter of the
+thesis.
+
+The quantile nearest neighbor (QNN) algorithm presented in [ref] is a
+local nonparametric estimation procedure for estimating conditional
+quantiles $Q_y(p; x)$ of a quantitative variable $y$ given one or more
+explanatory variables $x$.  For a probability point $p \in (0, 1)$,
+the QNN procedure allocates a parameter $\theta_i$ to every observed
+value $y_i$, and uses the check function $\rho_p(y) = |p - {\cal
+I}_{y<0}|$ to measure the fit between the $y_i$ and the $\theta_i$.  A
+form of neighborhood regularization based on a graph $G = G(X)$ is
+used to control bias and variance.  If two observations indexed $i$
+and $i^\prime$ are neighbors in $G$, then a term $\lambda |\theta_i
+- \theta_{i^\prime}|$ is included as an additive penalty with a
+regularization parameter $\lambda > 0$.  The construction of $G$ is
+based on nearest neighbors determined through the covariates in $X$.
+
+QNN seems to have been motivated with prediction as a main goal,
+whereas our goal here is to provide interpretable insight into data
+and the population that they represent.  Doing so is challenging for
+at least three reasons.  First, as considered in more detail below,
+the QNN procedure, like other local estimation procedures, exhibits a
+bias/variance tradeoff.  In general, estimates of conditional
+quantiles based on QNN will exhibit high variance that is related more
+to the neighborhood size than to the overall dataset size.  Also, the
+variance of these estimates tends to be greater than their squared
+bias.  In other words, the output of QNN is ``noisy'', especially for
+extreme probability points $p$.  Second, the QNN algorithm provides a
+voluminous output consisting of an estimated conditional quantile
+$\theta_i$ for each observation $y_i$, which are somewhat difficult to
+directly interpret in aggregate.  Third, like other local regression
+procedures, QNN suffers from the ``curse of dimensionality'', limiting
+its use with multiple covariates.  For these three reasons, in this
+chapter our main goal is to develop four ways to post-process the
+results of QNN to provide insight about a population of scientific
+interest.  Throughout the discussion we use for illustration two
+datasets relating to the relationship between human anthropometry and
+blood pressure.
+
+\subsection{QNN bias and variance}
+
+Like other local regression procedures such as the more familiar local
+linear regression, QNN trades off bias and variance based on the
+neighborhood size.  However unlike local regression procedures based
+on least squares, reducing the neighborhood size or allowing the
+regularization parameter $\lambda$ to shrink to zero does not produce
+unbiased estimates of the conditional quantiles in QNN.  In fact, as
+$\lambda$ approaches zero, the estimated $\theta_i$ approach $y_i$,
+since this minimizes the check function for any $p$.  Each $y_i$ can
+be interpreted as a median-unbiased estimate of its own true median,
+but if $p\ne 1/2$, setting $\theta_i = y_i$ leads to biased quantile
+estimates.  Therefore, the bias/variance tradeoff in QNN is more
+complicated than in local least squares regression.  Following the
+guidance in [ref] we set $\lambda=0.1$ and build $G$ using
+neighborhoods of size $5$.  In this section, we present simulation
+studies that further explore the bias and variance properties of the
+QNN algorithm.
+
+[...]
+
+\subsection{Interpreting QNN estimates using dimension reduction regression}
+
+After choosing a set of probability points, say $p=[0.1, 0.2, \ldots,
+0.9]$, we can use the QNN approach to estimate each conditional
+quantile in $p$ for all $n$ observations in our sample of data.  This
+yields a $n\times q$ matrix $Q$ (here $q=9$) containing the estimates
+$\hat{Q}_p(y_i; x_i)$.  We note that $Q$ is a function of both the
+response variable $Y\in {\cal R}^n$ and the matrix $X\in {\cal
+R}^{n\times d}$ of explanatory variables.  A natural goal is to assess
+how the quantiles vary with $X$.  Since the estimated quantiles in $Q$
+were explicitly constructed using $X$, there is an inbuilt
+relationship between $Q$ and $X$.  The question of interest is what
+form of relationship exists in the population -- that is, were we to
+have the true quantiles $Q_0$, what would be the relationship between
+$X$ and $Q_0$?
+
+Since each row of $Q$ and of $X$ corresponds to an observation, and
+both $Q$ and $X$ have multiple columns, it is natural to consider
+multivariate regression.  In this section, we consider the classical
+approach of canonical correlation analysis (CCA), and then we consider
+a more modern approach that may better capture non-linear
+relationships.
+
+CCA seeks to find vectors $\beta_1, \ldots, \beta_r$ and
+$\eta_1, \ldots, \eta_r$ such that (i) the vectors $X\beta_j$ are
+pairwise uncorrelated, (ii) the vectors $Q\eta_j$ are pairwise
+uncorrelated, and (iii) subject to (i)-(ii), the correlation between
+each $X\beta_j$ and $Q\eta_j$ is maximized.  The solution to this
+constrained optimization problem is efficiently obtained using the
+singular value decomposition (SVD).
+
+Since CCA is defined in terms of correlation coefficients which are
+scale-invariant, the magnitude of the vectors $\beta_j$ and $\eta_j$
+are not well-defined, and by convention are scaled so that
+$\|\beta_j\| = 1$ and $\|\eta_j\| = 1$ for all $j$.  The variance for
+a CCA-optimal variate, say ${\rm var}(Q\eta_j$), may be very small
+compared to ${\rm var}(Q\tilde{\eta})$ for some other unit vector
+$\tilde{\eta}$.  That is, CCA may find relationships for which the
+correlations between the $X$ and $Y$ variates are strong, but where
+either variate is a very small part of the overall variation (for $X$
+or $Y$ respectively).  To address this, we can pre-process the data
+with Principal Components Analysis (PCA).  In our setting this concern
+mainly arises with $Q$, so focusing on that side of the correlation,
+we first project $\tilde{Q} \equiv QP$ onto a given number $m$ of
+principal components, then conduct CCA using $X$ and $\tilde{Q}$
+instead of using $X$ and $Q$.  If $\tilde{\eta}_k$ is a CCA
+coefficient vector for $\tilde{Q}$ in this analysis, then
+$\eta_k \equiv P\eta_k$ represents the same coefficient vector
+expressed with respect to the original $Q$, for interpretability.
+
+The loading vectors $\eta_k$ for $Q$ correspond to factors in the
+space of quantile functions that are predictable from $X$.  To further
+aid interpretation, we note that if $\eta_k \propto 1$, we have a
+scaling relationship in which all quantiles change to the same extent
+as $X$ varies, as in a location/scale family.  While there is no
+gaurantee that such a scaling relationship is present, we have found
+that it often (approximately) is.  Therefore, we have found it useful
+to rotate the CCA solution to identify an approximate scaling
+relationship, and then interpret this factor in contrast to the
+remaining factors which capture non-scaling effects (e.g.\ effects on
+quantiles at different probability points to different extents).
+
+Rotations are an important part of classical factor analysis [ref].
+In this spirit, we developed a procedure to rotate the CCA solution so
+that the first factor loadings for $Q$ become approximately constant,
+reflecting a scaling relationship as discussed above.  This involves
+constructing a transformation matrix $F$ and replacing $\eta$ with
+$\eta F$, and replacing $\beta$ with $\beta F$.  In doing so, we wish
+to preserve the property that the scores $X\beta_j$ remain pairwise
+uncorrelated.  It is not possible in general when rotating to also
+preserve pairwise uncorrelatedness of the scores $Q\eta_j$, but this
+is arguably less important for interpretability.
+
+The rotation algorithm begins by using least squares to regress the
+first $Q$-loading vector $\eta_1$ onto a column of $1's$.  Let
+$\hat{\eta}_1$ denote the fitted values, and let $f_1$ denote the
+coefficient vector such that $\hat{\eta}_1 = \eta f$. The vector $f$
+becomes the first column of the transformation matrix $F$.  Subsequent
+columns of $F$ are obtained using the Gram-Schmidt procedure to
+preserve pairwise uncorrelatedness among the $X$-side scores. [NEEDS
+CLEANUP]
+
+As noted above, $Q$ is a matrix of estimated quantiles that are based
+partially on $X$.  Our goal is to assess how the underlying true
+quantiles $Q_0$ vary with $X$.  To address this question in a way that
+overcomes the inbuilt dependence between $Q$ and $X$, we use a
+randomization approach.  Specifically, we randomize the rows of $X$
+and re-estimate the quantiles in $Q$ and the rotated CCA.  We then
+consider the correlations between $Q\eta_j$ and $X\beta_j$ in the
+observed and randomized data.  To the extent that the former
+correlations are greater, the apparent relationship between $X$ and
+$Q$ is unlikely to be solely due to the way in which $Q$ was
+constructed.
+
+\subsubsection{NHANES}
+
+We analyzed the NHANES data using the procedures describe above, with
+systolic blood pressure as the dependent variable and age, BMI, and
+height as explanatory variables.  The explanatory variables are
+standardized to have mean zero and unit variance.
+
+Table [nhanes_qnn_drr_table1.tex] contains the results of this
+randomization study.  The results show that for both females and for
+males, the observed correlations are greater than the randomized
+correlations for all factors in the 1 and 2 factor solutions.  In the
+3-factor solution, the third factor is no more correlated with the
+explanatory variables than under randomization.  Thus we focus on the
+2-factor solution below.
+
+The coefficients in table [nhanes_qnn_drr_table1.tex] and the loading
+plots in [nhanes_qnn_drr_loadings.pdf] give insight into the
+relationship between the explanatory variables and the full
+distribution of blood pressure. The rotation procedure successfully
+constant an approximately constant loading pattern that becomes the
+first factor.  Unsurprisingly, the positive coefficients for age and
+BMI indicate that older people and people with higher BMI have
+uniformly greater blood pressure quantiles than younger people and
+people with lower BMI. Height has a small coefficient for females, but
+for males the height coefficient approaches the BMI coeffiicent.
+
+The second factor loading pattern is mostly decreasing and passes
+through zero near the median.  A high positive score against this
+pattern indicates less dispersion in the outcome around its median,
+while a strongly negative score against this pattern indicates more
+dispersion in the outcome around its median.  Inspecting the
+coefficients we see that older people have more negative scores and
+people with higher BMI (and to a lesser extent taller people) have
+more positive scores.  This indicates that the conditional quantiles
+for older people are more dispered around the conditional median, and
+the conditional quantiles for people with higher BMI and who are
+taller are less dispersed around the median.  [more could be said
+here...]
+
+\subsection{Post-processing QNN estimates with low-rank additive regression}
+
+[...]
+
+\subsection{Post-processing QNN estimates with local regression}

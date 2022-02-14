@@ -20,7 +20,7 @@ mutable struct Qreg
     x::Matrix{Float64}
 
     # Indices of the nearest neighbors
-    nn::Array{Int,2}
+    nn::Matrix{Int}
 
     # A tree for finding neighbors
     kt::KDTree
@@ -29,7 +29,7 @@ mutable struct Qreg
     model::JuMP.Model
 
     # The fitted values from the most recent call to fit
-    fit::Array{Float64,1}
+    fit::Vector{Float64}
 
     # The probability point for the most recent fit
     p::Float64
@@ -39,7 +39,6 @@ mutable struct Qreg
     rneg::Array{JuMP.VariableRef,1}
     dcap::Array{JuMP.VariableRef,2}
     rfit::Array{JuMP.VariableRef,1}
-
 end
 
 # Returns the degrees of freedom of the fitted model, which is the
@@ -60,7 +59,6 @@ function degf(qr::Qreg; e = 1e-2)::Int
     end
 
     return length(connected_components(g))
-
 end
 
 # Returns the BIC for the given fitted model.
@@ -78,16 +76,13 @@ end
 
 
 # Predict the quantile at the point z using k nearest neighbors.
-function predict(qr::Qreg, z::Array{Float64}; k = 5)::Float64
-
+function predict(qr::Qreg, z::Vector{Float64}; k = 5)::Float64
     ii, _ = knn(qr.kt, z, k)
     return mean(qr.fit[ii])
-
 end
 
 # Predict the quantile at the point z using local linear regression.
-function predict_smooth(qr::Qreg, z::Array{Float64}, bw::Array{Float64})::Float64
-
+function predict_smooth(qr::Qreg, z::Array{Float64}, bw::Vector{Float64})::Float64
     f = qr.fit
     x = qr.x
     n, r = size(x)
@@ -107,7 +102,6 @@ function predict_smooth(qr::Qreg, z::Array{Float64}, bw::Array{Float64})::Float6
 
     b = xtx \ xty
     return b[1]
-
 end
 
 # Construct a structure that can be used to perform quantile regression
@@ -146,24 +140,23 @@ function qreg_nn(y::Vector{Float64}, x::Matrix{Float64}; k::Int = 5)::Qreg
         @constraint(model, rfit[nn[:, j]] - rfit .<= dcap[:, j])
     end
 
-    return Qreg(y, x, nn, kt, model, Array{Float64,1}(), -1, rpos, rneg, dcap, rfit)
+    return Qreg(y, x, nn, kt, model, Vector{Float64}(), -1, rpos, rneg, dcap, rfit)
 end
 
 
 # Estimate the p'th quantiles for the population represented by the data
 # in qr. lam is a penalty parameter controlling the smoothness of the
 # fit.
-function fit(qr::Qreg, p::Float64, lam::Float64)::Array{Float64,1}
+function fit(qr::Qreg, p::Float64, lam::Float64)::Vector{Float64}
 
     @objective(qr.model, Min, sum(p * qr.rpos + (1 - p) * qr.rneg) + lam * sum(qr.dcap))
 
     optimize!(qr.model)
     if termination_status(qr.model) != MathOptInterface.OPTIMAL
-        error("fit did not converge")
+        error("Qreg fit did not converge")
     end
     qr.fit = value.(qr.rfit)
     return qr.fit
-
 end
 
 
@@ -193,7 +186,6 @@ function bic_search(qr::Qreg, p::Float64; fac = 1.2, lam_max = 1e6, dof_min = 2)
     la = minimum([x[2] for x in pa])
 
     return tuple(la, pa)
-
 end
 
 
@@ -226,7 +218,6 @@ function check1()
     @assert abs(predict_smooth(qr1, [0.0, 0.0], bw) - ax[1]) < 0.1
     @assert abs(predict_smooth(qr2, [0.0, 0.0], bw) - ax[2]) < 0.1
     @assert abs(predict_smooth(qr3, [0.0, 0.0], bw) - ax[3]) < 0.1
-
 end
 
 function check2()
@@ -247,7 +238,6 @@ function check2()
     end
 
     lineplot(lam, b)
-
 end
 
 function check3()
@@ -272,5 +262,4 @@ function check3()
 
         end
     end
-
 end
