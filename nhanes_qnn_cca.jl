@@ -74,11 +74,11 @@ end
 
 ifig, rslt = main(ifig)
 
-open("writing/nhanes_qnn_drr_table1.tex", "w") do io
+open("writing/nhanes_qnn_cca_table1.tex", "w") do io
     write(io, latexify(rslt, env = :table))
 end
 
 f = [@sprintf("plots/%03d.pdf", j) for j = 0:ifig-1]
 c =
-    `gs -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -sOutputFile=writing/nhanes_qnn_drr_loadings.pdf $f`
+    `gs -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -sOutputFile=writing/nhanes_qnn_cca_loadings.pdf $f`
 run(c)
