@@ -11,6 +11,9 @@ include("nhanes_prep.jl")
 
 ifig = 0
 
+sex = 2
+da = select_sex(sex)
+
 # Set up and run the quantile regression
 y = Vector{Float64}(da[:, :BPXSY1])
 X0 = Matrix{Float64}(da[:, [:RIDAGEYR_z, :BMXBMI_z, :BMXHT_z]])
@@ -50,7 +53,7 @@ end
 ifig = plot_basis(ifig)
 
 # Fit the low rank model
-cu, cv = 100000, 100
+cu, cv = 100, 100
 q = length(X)
 fr = fitlr(X, Xp, yq, cu * ones(q), cv * ones(q))
 

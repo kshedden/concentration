@@ -20,3 +20,20 @@ df = outerjoin(df, dx[3], on = :SEQN)
 vn = vcat([:RIAGENDR, :BPXSY1], dnames)
 da = df[:, vn]
 da = da[completecases(da), :]
+
+# Attach a Z-scored version of the variable named 'vn' to
+# the dataframe df.
+function zscore!(df, vn)
+    vz = Symbol(string(vn) * "_z")
+    df[!, vz] = (df[:, vn] .- mean(df[:, vn])) ./ std(df[:, vn])
+end
+
+function select_sex(sex)
+    dx = df[df.RIAGENDR.==sex, :]
+    dx = dx[:, [:BPXSY1, :BMXBMI, :RIDAGEYR, :BMXHT]]
+    dx = dx[completecases(dx), :]
+    zscore!(dx, :RIDAGEYR)
+    zscore!(dx, :BMXBMI)
+    zscore!(dx, :BMXHT)
+    return dx
+end

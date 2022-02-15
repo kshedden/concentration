@@ -104,103 +104,6 @@ function d2grid(n)
 end
 
 #=
-Generate functions that calculate the function value and gradient
-of the objective function.
-=#
-function flr_fungrad(
-    X::Vector{Matrix{Float64}},
-    Xp::Vector{Matrix{Float64}},
-    Q::Matrix{Float64},
-    cu::Vector{Float64},
-    cv::Vector{Float64},
-)
-    @assert length(X) == length(Xp) == length(cu) == length(cv)
-
-    n, m = size(Q)
-    nm = n * m
-    q = length(X)
-    d = [size(x, 2) for x in X]
-    xtq = [x' * Q for x in X]
-
-    # d2_u gives the second differences of Xp, by column
-	r = size(first(Xp), 1)
-	rm = r * m
-    d2_u = d2grid(r)
-    wu = [d2_u * x for x in Xp]
-    wu2 = [b' * b for b in wu]
-    Xp2 = [x' * x for x in Xp]
-
-    # d2v * v gives the second differences of v (by column).
-    d2v = d2grid(m)
-    d2v2 = d2v' * d2v
-
-    function f(pa::Params)::Float64
-
-        # Squared error loss
-        fv, _ = getfit(X, pa)
-        f = sum(abs2, Q - fv) / nm
-
-        # Penalty for u terms
-        f0 = f
-        for j in eachindex(X)
-            f += cu[j] * sum(abs2, pa.v[:, j]) * sum(abs2, wu[j] * pa.beta[j]) / rm
-        end
-
-        # Penalty for columns of v
-        for j = 1:size(pa.v, 2)
-           u = Xp[j] * pa.beta[j]
-           f += cv[j] * sum(abs2, u) * sum(abs2, d2v * pa.v[:, j]) / rm
-        end
-
-        return f
-    end
-
-    function g!(gr::Params, pa::Params; project = true)
-        xb = [X[j] * pa.beta[j] for j = 1:q]
-
-        # Gradient for loss function
-        for j = 1:q
-            gr.beta[j] .= -2 * xtq[j] * pa.v[:, j] / nm
-            gr.v[:, j] .= -2 * xtq[j]' * pa.beta[j] / nm
-
-            for k = 1:q
-               if j == k
-                   gr.beta[j] .+= 2 * sum(abs2, pa.v[:, j]) * X[j]' * xb[j] / nm
-                   gr.v[:, j] .+= 2 * sum(abs2, xb[j]) * pa.v[:, j] / nm
-               else
-                   c = dot(pa.v[:, j], pa.v[:, k])
-                   gr.beta[j] .+= c * X[j]' * X[k] * pa.beta[k] / nm
-                   gr.v[:, j] .+= dot(xb[j], xb[k]) * pa.v[:, k] / nm
-               end
-           end
-        end
-
-        # Gradient contributions from the penalty for u terms
-        for j in eachindex(X)
-            gr.beta[j] .+= 2 * cu[j] * sum(abs2, pa.v[:, j]) * wu2[j] * pa.beta[j] / rm
-            gr.v[:, j] .+= 2 * cu[j] * sum(abs2, wu[j] * pa.beta[j]) * pa.v[:, j] / rm
-        end
-
-        # Gradient contributions from the penalty for v
-        for j = 1:q
-            u = Xp[j] * pa.beta[j]
-            gr.v[:, j] .+= 2 * cv[j] * sum(abs2, u) * d2v2 * pa.v[:, j] / rm
-            gr.beta[j] .+= 2 * cv[j] * sum(abs2, d2v * pa.v[:, j]) * Xp2[j] * pa.beta[j] / rm
-        end
-
-        # Project
-        if project
-            for j = 1:q
-                dd = sum(abs2, pa.v[:, j])
-                gr.v[:, j] .-= dot(gr.v[:, j], pa.v[:, j]) * pa.v[:, j] / dd
-            end
-        end
-    end
-
-    return (f, g!)
-end
-
-#=
 Get starting values by using least squares
 to obtain a fit that is not rank-restricted,
 then approximating the least squares coefficients
@@ -246,50 +149,122 @@ function getstart(X, Q)::Params
     return Params(beta, vm)
 end
 
+function updateG!(G, cu, d, X, d2X, v)
+    f = length(d)
+    n = size(first(X), 1)
+    j1 = 0
+    for k1 = 1:f
+        j2 = 0
+        for k2 = 1:f
+            G[j1+1:j1+d[k1], j2+1:j2+d[k2]] .= X[k1]' * X[k2] * dot(v[:, k1], v[:, k2]) / n
+            j2 += d[k2]
+        end
+
+        # Beta penalty
+        G[j1+1:j1+d[k1], j1+1:j1+d[k1]] .+= cu[k1] * sum(abs2, v[:, k1]) * d2X[k1]
+        j1 += d[k1]
+    end
+end
+
+function updateC!(C, d, Q, X, v)
+    f = length(d)
+    n = size(first(X), 1)
+    j = 0
+    for k = 1:f
+        C[j+1:j+d[k]] .= X[k]' * Q * v[:, k] / n
+        j += d[k]
+    end
+end
+
+function deriv2(x::Matrix{Float64})::Matrix{Float64}
+    n, p = size(x)
+    xd = zeros(n - 2, p)
+    for j = 1:p
+        for i = 1:n-2
+            xd[i, j] = x[i, j] - 2 * x[i+1, j] + x[i+2, j]
+        end
+    end
+    return xd
+end
+
+function normalizepar!(pa::Params)
+    for j in eachindex(pa.beta)
+        f = norm(pa.beta[j])
+        pa.beta[j] ./= f
+        pa.v[:, j] .*= f
+    end
+end
+
+function updateV!(M, Q, X, d2, pa, cv)
+    n = size(first(X), 1)
+    m = size(pa.v, 1)
+    f = length(pa.beta)
+    ii = 0
+    for k = 1:m
+        for j = 1:f
+            M[ii+1:ii+n, m*(j-1)+k] = X[j] * pa.beta[j]
+        end
+        ii += n
+    end
+
+    u, s, v = svd(M)
+    xp = v * diagm(s .^ 2) * v'
+    ii = 0
+    for k = 1:f
+        xp[ii+1:ii+m, ii+1:ii+m] .+= cv[k] * d2
+        ii += m
+    end
+
+    pa.v .= reshape(xp \ (v * diagm(s) * u' * vec(Q)), m, f)
+end
+
 function fitlr(
     X::Vector{Matrix{Float64}},
     Xp::Vector{Matrix{Float64}},
     Q::Matrix{Float64},
     cu::Vector{Float64},
     cv::Vector{Float64};
+    maxiter = 2000,
     args...,
 )
+    @assert all([size(Q, 1) == size(x, 1) for x in X])
+
     d = [size(x, 2) for x in X]
-    m = size(Q, 2)
-    f, g! = flr_fungrad(X, Xp, Q, cu, cv)
+    n, m = size(Q)
+    f = length(d)
+    pa = getstart(X, Q)
+    dd = sum(d)
 
-    p0 = getstart(X, Q)
-    grad = copy_params(p0)
+    G = zeros(dd, dd)
+    C = zeros(dd)
+    M = zeros(n * m, m * f)
 
-    f0 = f(p0)
-    for itr = 1:1000
-        g!(grad, p0; project = true)
-        p1 = copy_params(p0)
-        step = 0.5
-        f1 = nothing
-        success = false
-        while step > 1e-18
-            p1.v = p0.v - step * grad.v
-            for j in eachindex(p0.beta)
-                p1.beta[j] = p0.beta[j] - step * grad.beta[j]
-            end
-            f1 = f(p1)
-            if f1 < f0
-                success = true
-                p0 = p1
-                f0 = f1
-                break
-            end
-            step /= 2
-        end
+    # Second derivatives for beta
+    D2x = [deriv2(x) for x in Xp]
+    D2x = [size(b, 1) * b' * b for b in D2x]
 
-        if !success
-            println("Failed to find downhill step")
+    # Second derivatives for v
+    d2 = d2grid(m)
+    d2 = m * d2' * d2
+
+    for itr = 1:maxiter
+        p0 = copy_params(pa)
+
+        # Update beta
+        updateG!(G, cu, d, X, D2x, pa.v)
+        updateC!(C, d, Q, X, pa.v)
+        b = G \ C
+        pa.val[1:length(b)] .= b
+
+        # Update v
+        updateV!(M, Q, X, d2, pa, cv)
+
+        normalizepar!(pa)
+
+        if norm(pa.val - p0.val) < 1e-10
             break
         end
     end
 
-    println(@sprintf("|grad|=%f", norm(grad.val)))
-
-    return p0
+    return pa
 end

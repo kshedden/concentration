@@ -41,12 +41,12 @@ end
 
 function qnn_cca(y, xmat, npc, nperm)
 
-	xmat = copy(xmat)
-	center!(xmat)
+    xmat = copy(xmat)
+    center!(xmat)
 
     sp = []
     eta1, beta1, s1 = nothing, nothing, nothing
-	qhc1, xmat1 = nothing, nothing
+    qhc1, xmat1 = nothing, nothing
     for k = 1:nperm+1
 
         # On the first iteration, analyze the actual data.

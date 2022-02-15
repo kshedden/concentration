@@ -10,23 +10,6 @@ include("nhanes_prep.jl")
 include("qreg_nn.jl")
 include("cancorr.jl")
 
-# Attach a Z-scored version of the variable named 'vn' to
-# the dataframe df.
-function zscore!(df, vn)
-    vz = Symbol(string(vn) * "_z")
-    df[!, vz] = (df[:, vn] .- mean(df[:, vn])) ./ std(df[:, vn])
-end
-
-function select_sex(sex)
-    dx = df[df.RIAGENDR.==sex, :]
-    dx = dx[:, [:BPXSY1, :BMXBMI, :RIDAGEYR, :BMXHT]]
-    dx = dx[completecases(dx), :]
-    zscore!(dx, :RIDAGEYR)
-    zscore!(dx, :BMXBMI)
-    zscore!(dx, :BMXHT)
-    return dx
-end
-
 function run1(sex, npc, nperm)
     dx = select_sex(sex)
     y = dx[:, :BPXSY1]
@@ -61,8 +44,8 @@ function main(ifig)
             PyPlot.axes([0.13, 0.1, 0.75, 0.8])
             PyPlot.grid(true)
             PyPlot.title(sex == 1 ? "Male" : "Female")
-            PyPlot.xlabel("Probability point", size=15)
-            PyPlot.ylabel("Loading", size=15)
+            PyPlot.xlabel("Probability point", size = 15)
+            PyPlot.ylabel("Loading", size = 15)
             for (j, e) in enumerate(eachcol(eta))
                 PyPlot.plot(pp, e, "-", label = @sprintf("%d", j))
             end
@@ -85,7 +68,7 @@ function main(ifig)
             end
         end
     end
-    
+
     return ifig, rslt
 end
 

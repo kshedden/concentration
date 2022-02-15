@@ -50,30 +50,30 @@ u2, s2, v2 = svd(tqc)
 
 function simstudy()
 
-	# Generate data
-	y = mu + sd .* randn(n)
+    # Generate data
+    y = mu + sd .* randn(n)
 
-	npc = 2
-	nperm = 0
-	eta, beta, qhc, xmat1, ss, sp = qnn_cca(y, xmat, npc, nperm)
+    npc = 2
+    nperm = 0
+    eta, beta, qhc, xmat1, ss, sp = qnn_cca(y, xmat, npc, nperm)
 
-	# Calculate how accurately we recovered the quantile profiles.
-	a1 = canonical_angles(qhc * eta[:, 1:2], qhc * v2[:, 1:2])
+    # Calculate how accurately we recovered the quantile profiles.
+    a1 = canonical_angles(qhc * eta[:, 1:2], qhc * v2[:, 1:2])
 
-	# Calculate how accurately we recovered the variable profiles.
-	tb = hcat(beta_mean, beta_var)
-	a2 = canonical_angles(xmat1 * beta[:, 1:2], xmat * tb)
+    # Calculate how accurately we recovered the variable profiles.
+    tb = hcat(beta_mean, beta_var)
+    a2 = canonical_angles(xmat1 * beta[:, 1:2], xmat * tb)
 
-	return acos.(clamp.(a1, -1, 1)), acos.(clamp.(a2, -1, 1))
+    return acos.(clamp.(a1, -1, 1)), acos.(clamp.(a2, -1, 1))
 end
 
 nrep = 100
 eta1_ang = zeros(nrep, 2)
 beta1_ang = zeros(nrep, 2)
-for itr in 1:nrep
-	e, b = simstudy()
-	eta1_ang[itr, :] = e
-	beta1_ang[itr, :] = b
+for itr = 1:nrep
+    e, b = simstudy()
+    eta1_ang[itr, :] = e
+    beta1_ang[itr, :] = b
 end
 
 # Not used now
