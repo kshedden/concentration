@@ -93,64 +93,38 @@ function qnn_cca(y, xmat, npc, nperm)
     return (eta1, beta1, qhc1, xmat1, s1, sp)
 end
 
-function qnn_mpsir(y, xmat, npc, nmp, nperm)
+function qnn_mpsir(y, xmat, npc, nmp; nslicex = 10, nslicey = 10)
 
     xmat = copy(xmat)
     center!(xmat)
 
-    sp = []
-    eta1, beta1, s1 = nothing, nothing, nothing
-    qhc1, xmat1 = nothing, nothing
-    eigx, eigy = nothing, nothing
-    for k = 1:nperm+1
-
-        # On the first iteration, analyze the actual data.
-        # Subsequent iterations work with permuted data.
-        if k > 1
-            ii = collect(1:size(xmat, 1))
-            shuffle!(ii)
-            xmat = xmat[ii, :]
-        end
-
-        # Get the fitted quantiles
-        qr = qreg_nn(y, xmat)
-        qh = zeros(length(y), length(pp))
-        for (j, p) in enumerate(pp)
-            _ = fit(qr, p, 0.1)
-            qh[:, j] = qr.fit
-        end
-        qhc = copy(qh)
-        center!(qhc)
-
-        # Center the fitted quantiles and calculate their dominant factors.
-        qhc = copy(qh)
-        center!(qhc)
-        upc, spc, vpc = svd(qhc)
-
-        # Reduce the quantiles to PC's
-        qhcpc = qhc * vpc[:, 1:npc]
-
-        mp = MPSIR(qhcpc, xmat)
-        Dimred.fit!(mp, 2, 2; nslicex = 10, nslicey = 10)
-        etar1, betar1 = Dimred.coef(mp)
-        etar1 = vpc[:, 1:npc] * etar1
-        eigy1, eigx1 = Dimred.eig(mp)
-        betar1, etar1 = rotate_hom(betar1, etar1, xmat, qhc)
-
-        if k == 1
-            # Actual result
-            eta1, beta1 = etar1, betar1
-            qhc1, xmat1 = qhc, xmat
-            eigx, eigy = eigx1, eigy1
-        else
-            # Permuted result
-            #push!(sp, s)
-        end
+    # Get the fitted quantiles
+    qr = qreg_nn(y, xmat)
+    qh = zeros(length(y), length(pp))
+    for (j, p) in enumerate(pp)
+        _ = fit(qr, p, 0.1)
+        qh[:, j] = qr.fit
     end
+    qhc = copy(qh)
+    center!(qhc)
 
-    #sp = hcat(sp...)
+    # Center the fitted quantiles and calculate their dominant 
+    # PC factors.
+    qhc = copy(qh)
+    center!(qhc)
+    upc, spc, vpc = svd(qhc)
 
-    return (eta1, beta1, qhc1, xmat1, eigx, eigy)
+    # Reduce the quantiles to PC's
+    qhcpc = qhc * vpc[:, 1:npc]
+
+    mp = MPSIR(qhcpc, xmat)
+    Dimred.fit!(mp, nmp, nmp; nslicex = nslicex, nslicey = nslicey)
+    eta, beta = Dimred.coef(mp)
+    eta = vpc[:, 1:npc] * eta
+    eigy, eigx = Dimred.eig(mp)
+    beta, eta = rotate_hom(beta, eta, xmat, qhc)
+
+    return (eta, beta, qhc, xmat, eigx, eigy)
 end
 
 function center!(x)

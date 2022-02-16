@@ -21,6 +21,9 @@ vn = vcat([:RIAGENDR, :BPXSY1], dnames)
 da = df[:, vn]
 da = da[completecases(da), :]
 
+# Restrict to people aged 18 and over.
+da = da[da.RIDAGEYR.>=18, :]
+
 # Attach a Z-scored version of the variable named 'vn' to
 # the dataframe df.
 function zscore!(df, vn)
