@@ -137,7 +137,7 @@ end
 function main(ifig)
 
     rslt = DataFrame(
-        sex = String[],
+        Sex = String[],
         Point = String[],
         Age = Float64[],
         BMI = Float64[],
@@ -153,7 +153,7 @@ end
 rslt, ifig = main(ifig)
 
 open("writing/nhanes_qnn_mpsir_table1.tex", "w") do io
-    write(io, latexify(rslt, fmt="%.2f", env = :table))
+    write(io, latexify(rslt, fmt = "%.2f", env = :table))
 end
 
 f = [@sprintf("plots/%03d.pdf", j) for j = 0:ifig-1]

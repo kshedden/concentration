@@ -93,7 +93,7 @@ function qnn_cca(y, xmat, npc, nperm)
     return (eta1, beta1, qhc1, xmat1, s1, sp)
 end
 
-function qnn_mpsir(y, xmat, npc, nmp; nslicex = 10, nslicey = 10)
+function qnn_mpsir(y, xmat, npc, nmp; nslicex=10, nslicey=10)
 
     xmat = copy(xmat)
     center!(xmat)
@@ -211,8 +211,8 @@ end
 
 function check_cancorr()
     n = 300
-    X = randn(n, 3)
-    Y = randn(n, 3)
+    X = randn(n, 3) * randn(3, 3)
+    Y = randn(n, 3) * randn(3, 3)
     Y[:, 2] = X[:, 1] - X[:, 3] + randn(n)
     Y[:, 3] = X[:, 2] + randn(n)
     beta, eta, s = cancorr(X, Y)
