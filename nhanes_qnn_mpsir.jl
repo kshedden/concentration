@@ -56,18 +56,34 @@ function main(ifig)
             PyPlot.savefig(@sprintf("plots/%03d.pdf", ifig))
             ifig += 1
 
-            for j = 1:nms
-                PyPlot.clf()
-	            PyPlot.title(sex == 1 ? "Male" : "Female")
-                PyPlot.grid(true)
-				u1 = xmat * beta[:, j]
-				u2 = qhc * eta[:, j]
-				PyPlot.plot(u1, u2, "o", alpha=0.2, rasterized=true)
-                PyPlot.ylabel("Quantile score", size = 15)
-                PyPlot.xlabel("Covariate score", size = 15)
-                PyPlot.savefig(@sprintf("plots/%03d.pdf", ifig))
-                ifig += 1
+            # Q vs X scatterplots
+            for j1 = 1:nms
+                for j2 = 1:nms
+                    PyPlot.clf()
+                    PyPlot.title(sex == 1 ? "Male" : "Female")
+                    PyPlot.grid(true)
+                    u1 = xmat * beta[:, j1]
+                    u2 = qhc * eta[:, j2]
+                    PyPlot.plot(u1, u2, "o", alpha = 0.2, rasterized = true)
+                    PyPlot.ylabel(@sprintf("Quantile score %d", j2), size = 15)
+                    PyPlot.xlabel(@sprintf("Covariate score %d", j1), size = 15)
+                    PyPlot.savefig(@sprintf("plots/%03d.pdf", ifig))
+                    ifig += 1
+                end
             end
+
+            # X versus X scatterplot
+            PyPlot.clf()
+            PyPlot.title(sex == 1 ? "Male" : "Female")
+            PyPlot.grid(true)
+            u1 = xmat * beta[:, 1]
+            u2 = xmat * beta[:, 2]
+            println(mean(u1), " ", mean(u2), " ", std(u1), " ", std(u2))
+            PyPlot.plot(u1, u2, "o", alpha = 0.2, rasterized = true)
+            PyPlot.ylabel("Covariate score 2", size = 15)
+            PyPlot.xlabel("Covariate score 1", size = 15)
+            PyPlot.savefig(@sprintf("plots/%03d.pdf", ifig))
+            ifig += 1
         end
     end
 

@@ -131,10 +131,10 @@ function qnn_mpsir(y, xmat, npc, nmp, nperm)
         qhcpc = qhc * vpc[:, 1:npc]
 
         mp = MPSIR(qhcpc, xmat)
-        fit!(mp, 2, 2; nslicex = 10, nslicey = 10)
-        etar1, betar1 = coef(mp)
+        Dimred.fit!(mp, 2, 2; nslicex = 10, nslicey = 10)
+        etar1, betar1 = Dimred.coef(mp)
         etar1 = vpc[:, 1:npc] * etar1
-        eigy1, eigx1 = eig(mp)
+        eigy1, eigx1 = Dimred.eig(mp)
         betar1, etar1 = rotate_hom(betar1, etar1, xmat, qhc)
 
         if k == 1
