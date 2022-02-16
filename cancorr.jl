@@ -1,4 +1,4 @@
-using LinearAlgebra, Statistics
+using LinearAlgebra, Statistics, Dimred
 
 include("qreg_nn.jl")
 
@@ -91,6 +91,66 @@ function qnn_cca(y, xmat, npc, nperm)
     sp = hcat(sp...)
 
     return (eta1, beta1, qhc1, xmat1, s1, sp)
+end
+
+function qnn_mpsir(y, xmat, npc, nmp, nperm)
+
+    xmat = copy(xmat)
+    center!(xmat)
+
+    sp = []
+    eta1, beta1, s1 = nothing, nothing, nothing
+    qhc1, xmat1 = nothing, nothing
+    eigx, eigy = nothing, nothing
+    for k = 1:nperm+1
+
+        # On the first iteration, analyze the actual data.
+        # Subsequent iterations work with permuted data.
+        if k > 1
+            ii = collect(1:size(xmat, 1))
+            shuffle!(ii)
+            xmat = xmat[ii, :]
+        end
+
+        # Get the fitted quantiles
+        qr = qreg_nn(y, xmat)
+        qh = zeros(length(y), length(pp))
+        for (j, p) in enumerate(pp)
+            _ = fit(qr, p, 0.1)
+            qh[:, j] = qr.fit
+        end
+        qhc = copy(qh)
+        center!(qhc)
+
+        # Center the fitted quantiles and calculate their dominant factors.
+        qhc = copy(qh)
+        center!(qhc)
+        upc, spc, vpc = svd(qhc)
+
+        # Reduce the quantiles to PC's
+        qhcpc = qhc * vpc[:, 1:npc]
+
+        mp = MPSIR(qhcpc, xmat)
+        fit!(mp, 2, 2; nslicex = 10, nslicey = 10)
+        etar1, betar1 = coef(mp)
+        etar1 = vpc[:, 1:npc] * etar1
+        eigy1, eigx1 = eig(mp)
+        betar1, etar1 = rotate_hom(betar1, etar1, xmat, qhc)
+
+        if k == 1
+            # Actual result
+            eta1, beta1 = etar1, betar1
+            qhc1, xmat1 = qhc, xmat
+            eigx, eigy = eigx1, eigy1
+        else
+            # Permuted result
+            #push!(sp, s)
+        end
+    end
+
+    #sp = hcat(sp...)
+
+    return (eta1, beta1, qhc1, xmat1, eigx, eigy)
 end
 
 function center!(x)

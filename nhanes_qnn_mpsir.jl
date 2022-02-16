@@ -1,5 +1,5 @@
 using Statistics, DataFrames, Statistics, Random, Latexify
-using PyPlot
+using PyPlot, Dimred, UnicodePlots, StatsBase
 
 rm("plots", recursive = true, force = true)
 mkdir("plots")
@@ -10,13 +10,13 @@ include("nhanes_prep.jl")
 include("qreg_nn.jl")
 include("cancorr.jl")
 
-function run_cca(sex, npc, nperm)
+function run_mpsir(sex, npc, nms, nperm)
     dx = select_sex(sex)
     y = dx[:, :BPXSY1]
     y = Vector{Float64}(y)
     xmat = dx[:, [:RIDAGEYR_z, :BMXBMI_z, :BMXHT_z]]
     xmat = Matrix{Float64}(xmat)
-    return qnn_cca(y, xmat, npc, nperm)
+    return qnn_mpsir(y, xmat, npc, nms, nperm)
 end
 
 pp = range(0.1, 0.9, length = 9)
@@ -37,11 +37,12 @@ function main(ifig)
     )
     for sex in [2, 1]
         println("sex=$(sex)")
-        for npc in [1, 2, 3]
-            eta, beta, qhc, xmat, ss, sp = run_cca(sex, npc, nrand)
+        for nms in [2]
+            npc = nms + 1
+            eta, beta, qhc, xmat, eigx, eigy = run_mpsir(sex, npc, nms, nrand)
 
             PyPlot.clf()
-            PyPlot.axes([0.13, 0.1, 0.75, 0.8])
+            PyPlot.axes([0.16, 0.13, 0.72, 0.8])
             PyPlot.grid(true)
             PyPlot.title(sex == 1 ? "Male" : "Female")
             PyPlot.xlabel("Probability point", size = 15)
@@ -55,16 +56,17 @@ function main(ifig)
             PyPlot.savefig(@sprintf("plots/%03d.pdf", ifig))
             ifig += 1
 
-            println(ss)
-            println(maximum(sp))
-            for (j, c) in enumerate(eachcol(beta))
-                row = [sex == 2 ? "Female" : "Male", @sprintf("%d", npc), @sprintf("%d", j)]
-                for a in c
-                    push!(row, @sprintf("%.2f", a))
-                end
-                push!(row, @sprintf("%.2f", ss[j]))
-                push!(row, @sprintf("%.2f", quantile(sp[j, :], 0.95)))
-                push!(rslt, row)
+            for j = 1:nms
+                PyPlot.clf()
+	            PyPlot.title(sex == 1 ? "Male" : "Female")
+                PyPlot.grid(true)
+				u1 = xmat * beta[:, j]
+				u2 = qhc * eta[:, j]
+				PyPlot.plot(u1, u2, "o", alpha=0.2, rasterized=true)
+                PyPlot.ylabel("Quantile score", size = 15)
+                PyPlot.xlabel("Covariate score", size = 15)
+                PyPlot.savefig(@sprintf("plots/%03d.pdf", ifig))
+                ifig += 1
             end
         end
     end
@@ -74,11 +76,11 @@ end
 
 ifig, rslt = main(ifig)
 
-open("writing/nhanes_qnn_cca_table1.tex", "w") do io
+open("writing/nhanes_qnn_mpsir_table1.tex", "w") do io
     write(io, latexify(rslt, env = :table))
 end
 
 f = [@sprintf("plots/%03d.pdf", j) for j = 0:ifig-1]
 c =
-    `gs -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -sOutputFile=writing/nhanes_qnn_cca_loadings.pdf $f`
+    `gs -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -sOutputFile=writing/nhanes_qnn_mpsir_loadings.pdf $f`
 run(c)
