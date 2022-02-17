@@ -17,24 +17,24 @@ using Random, PyPlot, LinearAlgebra
 # optimization algorithm.
 function target(Y::Vector{T}, X::Vector{T}) where {T<:AbstractVector}
 
-	n = length(X)
-	N = length(Y)
+    n = length(X)
+    N = length(Y)
 
-	f = 0.0
-	for y in Y
-		for x in X
-			f += norm(x - y)
-		end
-	end
-	f *= 2 / (n * N)
+    f = 0.0
+    for y in Y
+        for x in X
+            f += norm(x - y)
+        end
+    end
+    f *= 2 / (n * N)
 
-	for j1 in eachindex(X)
-		for j2 in 1:j1-1
-			f -= 2 * norm(X[j1] - X[j2]) / n^2
-		end
-	end
+    for j1 in eachindex(X)
+        for j2 = 1:j1-1
+            f -= 2 * norm(X[j1] - X[j2]) / n^2
+        end
+    end
 
-	return f
+    return f
 end
 
 # One iteration of fitting.  Returns an updated set of support points
@@ -91,9 +91,9 @@ function support(
 
     N = length(Y)
 
-	# Starting values are a random sample from the data.
-	# Need to perturb since the algorithm has a singularity
-	# when a support point is exactly equal to a data point.
+    # Starting values are a random sample from the data.
+    # Need to perturb since the algorithm has a singularity
+    # when a support point is exactly equal to a data point.
     ii = randperm(N)[1:n]
     d = length(first(Y))
     X = [copy(Y[i]) + 0.1 * randn(d) for i in ii]

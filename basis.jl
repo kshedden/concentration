@@ -4,8 +4,7 @@ function genbasis(x, b, s; linear = false)
     B = Vector{Vector{Float64}}()
 
     if linear
-        mx = mean(x)
-        f0 = x -> x .- mx
+        f0 = x -> x
         push!(fl, f0)
         push!(B, f0(x))
     end
@@ -20,10 +19,9 @@ function genbasis(x, b, s; linear = false)
     for j = 1:b
         y0 = (x .- c[j]) / s
         y0 = exp.(-y0 .^ 2 / 2)
-        m0 = mean(y0)
         f = function (x)
             y = (x .- c[j]) / s
-            return exp.(-y .^ 2 / 2) .- m0
+            return exp.(-y .^ 2 / 2) .- exp(-c[j]^2 / (2 * s^2))
         end
         push!(B, f(x))
         push!(fl, f)

@@ -27,16 +27,20 @@ for j = 1:9
     yq[:, j] .-= yqm[j]
 end
 
+pp = collect(range(0.01, 0.99, length = 101))
+qq = quantile(Normal(0, 1), pp)
+
 # Create basis functions for the low-rank model.
 X, Xp = Vector{Matrix{Float64}}(), Vector{Matrix{Float64}}()
-pp = collect(range(0.01, 0.99, length = 100))
-qq = quantile(Normal(0, 1), pp)
-qa = []
+gr = collect(range(-2, 2, length = 101))
+grx = []
+gl = []
 for x0 in eachcol(X0)
     B, g = genbasis(x0, 5, std(x0) / 2, linear = true)
+    push!(gl, g)
     push!(X, B)
-    push!(Xp, g(qq))
-    push!(qa, qq)
+    push!(Xp, g(gr))
+    push!(grx, gr)
 end
 
 # Plot the basis functions
@@ -53,7 +57,7 @@ end
 ifig = plot_basis(ifig)
 
 # Fit the low rank model
-cu, cv = 100, 100
+cu, cv = 10, 1000
 q = length(X)
 fr = fitlr(X, Xp, yq, cu * ones(q), cv * ones(q))
 
@@ -72,7 +76,7 @@ function plots1(ifig)
 
         PyPlot.clf()
         PyPlot.grid(true)
-        PyPlot.plot(qa[k], u, "-")
+        PyPlot.plot(grx[k], u, "-")
         PyPlot.xlabel(@sprintf("%s Z-score", vnames[k]), size = 15)
         PyPlot.ylabel(@sprintf("%s PC score", vnames[k]), size = 15)
         PyPlot.savefig(@sprintf("plots/%03d.pdf", ifig))
@@ -92,14 +96,17 @@ function plots1(ifig)
         PyPlot.savefig(@sprintf("plots/%03d.pdf", ifig))
         ifig += 1
 
+        mx = maximum(abs, m)
         PyPlot.clf()
         im = PyPlot.imshow(
             m,
             interpolation = "nearest",
             aspect = "auto",
             origin = "lower",
-            extent = [minimum(ppy), maximum(ppy), minimum(qa[k]), maximum(qa[k])],
+            extent = [minimum(ppy), maximum(ppy), minimum(grx[k]), maximum(grx[k])],
             cmap = "bwr",
+            vmin = -mx,
+            vmax = mx,
         )
         PyPlot.colorbar()
         PyPlot.xlabel("SBP quantiles", size = 15)
@@ -113,5 +120,5 @@ end
 ifig = plots1(ifig)
 
 f = [@sprintf("plots/%03d.pdf", j) for j = 0:ifig-1]
-c = `gs -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -sOutputFile=nhanes_reg.pdf $f`
+c = `gs -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -sOutputFile=writing/nhanes_reg.pdf $f`
 run(c)

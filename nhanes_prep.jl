@@ -28,7 +28,9 @@ da = da[da.RIDAGEYR.>=18, :]
 # the dataframe df.
 function zscore!(df, vn)
     vz = Symbol(string(vn) * "_z")
-    df[!, vz] = (df[:, vn] .- mean(df[:, vn])) ./ std(df[:, vn])
+    md = median(df[:, vn])
+    mad = median(abs.(df[:, vn] .- md))
+    df[!, vz] = (df[:, vn] .- md) ./ (0.67 * mad)
 end
 
 function select_sex(sex)
