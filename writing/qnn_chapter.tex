@@ -289,6 +289,21 @@ that the conditional quantiles for older people are more dispered around
 the conditional median, and the conditional quantiles for people with
 higher BMI and who are taller are less dispersed around the median.
 
+% Next paragraph based on nhanes_compare_qnn_cca_mpsir.jl
+
+We compared the subspaces found by CCA to the subspaces found by MP-SIR
+by calculating the canonical angles between the X-side spaces and Q-side
+spaces estimated by the two different methods.  All canonical angles
+are presented in radian units, and range from 0 (perfect concorance)
+to $\pi/2$ (perfect discordance) .  Since we are working with three
+covariates (on the X-side) and three principal components (on the Q-side),
+any two 2-dimensional subspaces must have a first canonical angle of zero.
+Therefore we use the second canonical angle to summarize the concordance
+between the two methods.  For females, the second canonical angle for the
+X-side is 0.02 and the second canonical angle for the Q-side is 0.66.
+For males, the second canonical angle for the X-side and Q-side are
+both 0.19.
+
 \subsection{Post-processing QNN estimates with low-rank additive
 regression}
 

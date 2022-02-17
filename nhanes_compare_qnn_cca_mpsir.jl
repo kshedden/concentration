@@ -49,6 +49,7 @@ for sex in [2, 1]
     center!(qhc)
 
     sexs = sex == 2 ? "Female" : "Male"
+	println(sexs)
 
     bcca = filter(row -> row.Sex == sexs, beta_cca)
     bcca = bcca[:, 3:end]
@@ -57,7 +58,7 @@ for sex in [2, 1]
     bmps = bmps[:, 3:end]
     bmps = Array{Float64}(bmps)'
     a = canonical_angles(xmat * bcca, xmat * bmps)
-    println(a)
+    println("beta:", a)
 
     ecca = filter(row -> row.Sex == sexs, eta_cca)
     ecca = ecca[:, 3:end]
@@ -66,6 +67,6 @@ for sex in [2, 1]
     emps = emps[:, 3:end]
     emps = Array{Float64}(emps)'
     a = canonical_angles(qhc * ecca, qhc * emps)
-    println(a)
+    println("eta:", a)
 
 end
