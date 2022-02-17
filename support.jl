@@ -13,6 +13,30 @@ https://arxiv.org/abs/1609.01811
 
 using Random, PyPlot, LinearAlgebra
 
+# The target function to be minimized, not explicitly used in the
+# optimization algorithm.
+function target(Y::Vector{T}, X::Vector{T}) where {T<:AbstractVector}
+
+	n = length(X)
+	N = length(Y)
+
+	f = 0.0
+	for y in Y
+		for x in X
+			f += norm(x - y)
+		end
+	end
+	f *= 2 / (n * N)
+
+	for j1 in eachindex(X)
+		for j2 in 1:j1-1
+			f -= 2 * norm(X[j1] - X[j2]) / n^2
+		end
+	end
+
+	return f
+end
+
 # One iteration of fitting.  Returns an updated set of support points
 # based on the current support points in X and the data in Y.
 function _update_support(Y::Vector{T}, X::Vector{T}) where {T<:AbstractVector}
@@ -66,6 +90,10 @@ function support(
 )::Vector{T} where {T<:AbstractVector}
 
     N = length(Y)
+
+	# Starting values are a random sample from the data.
+	# Need to perturb since the algorithm has a singularity
+	# when a support point is exactly equal to a data point.
     ii = randperm(N)[1:n]
     d = length(first(Y))
     X = [copy(Y[i]) + 0.1 * randn(d) for i in ii]
@@ -106,8 +134,8 @@ function test1()
         y = sin(x) + 0.3 * randn()
         push!(Y, [x, y])
     end
+
     X = support(Y, 10)
-    println(X)
 
     PyPlot.clf()
     PyPlot.grid(true)
