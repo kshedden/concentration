@@ -49,7 +49,7 @@ function plot_basis(ifig)
     PyPlot.clf()
     PyPlot.grid(true)
     for k = 1:size(xp, 2)
-        PyPlot.plot(qq, xp[:, k])
+        PyPlot.plot(gr, xp[:, k])
     end
     PyPlot.savefig(@sprintf("plots/%03d.pdf", ifig))
     return ifig + 1
