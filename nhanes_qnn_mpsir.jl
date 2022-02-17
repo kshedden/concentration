@@ -86,6 +86,33 @@ function runx(sex, rslt, ifig)
     PyPlot.title(sex == 1 ? "Male" : "Female")
     PyPlot.grid(true)
     PyPlot.plot(u[:, 1], u[:, 2], "o", alpha = 0.2, rasterized = true)
+
+    # Make it a biplot
+    bs = 2 * beta
+    for j = 1:3
+        # Move the text so that the arrow ends at the loadings.
+        bs[j, :] .+= 0.2 * bs[j, :] / norm(bs[j, :])
+    end
+    PyPlot.gca().annotate(
+        "Age",
+        xytext = (bs[1, 1], bs[1, 2]),
+        xy = (0, 0),
+        arrowprops = Dict(:arrowstyle => "<-", :shrinkA => 0, :shrinkB => 0),
+    )
+    PyPlot.gca().annotate(
+        "BMI",
+        xytext = (bs[2, 1], bs[2, 2]),
+        xy = (0, 0),
+        arrowprops = Dict(:arrowstyle => "<-", :shrinkA => 0, :shrinkB => 0),
+    )
+    PyPlot.gca().annotate(
+        "Ht",
+        xytext = (bs[3, 1], bs[3, 2]),
+        xy = (0, 0),
+        arrowprops = Dict(:arrowstyle => "<-", :shrinkA => 0, :shrinkB => 0),
+    )
+
+    # Show the support points with letters.
     for (k, z) in enumerate(sp)
         PyPlot.text(
             z[1],
@@ -131,7 +158,7 @@ function runx(sex, rslt, ifig)
     PyPlot.savefig(@sprintf("plots/%03d.pdf", ifig))
     ifig += 1
 
-    return ifig, rslt
+    return rslt, beta, eta, ifig
 end
 
 function main(ifig)
@@ -144,9 +171,48 @@ function main(ifig)
         Height = Float64[],
     )
 
+    beta_x2 = DataFrame(
+        Sex = String[],
+        J = Int[],
+        Age = Float64[],
+        BMI = Float64[],
+        Height = Float64[],
+    )
+    eta_x2 = DataFrame(
+        Sex = String[],
+        J = Int[],
+        eta1 = Float64[],
+        eta2 = Float64[],
+        eta3 = Float64[],
+        eta4 = Float64[],
+        eta5 = Float64[],
+        eta6 = Float64[],
+        eta7 = Float64[],
+        eta8 = Float64[],
+        eta9 = Float64[],
+    )
+
     for sex in [2, 1]
-        ifig, rslt = runx(sex, rslt, ifig)
+        rslt, beta, eta, ifig = runx(sex, rslt, ifig)
+
+        # Save coefficients for comparison to CCA
+        if nmp == 2
+            for (j, c) in enumerate(eachcol(beta))
+                row = [sex == 2 ? "Female" : "Male", j, beta[:, j]...]
+                push!(beta_x2, row)
+            end
+            for (j, c) in enumerate(eachcol(eta))
+                row = [sex == 2 ? "Female" : "Male", j, eta[:, j]...]
+                push!(eta_x2, row)
+            end
+        end
     end
+
+    if nmp == 2
+        CSV.write("beta_mpsir.csv", beta_x2)
+        CSV.write("eta_mpsir.csv", eta_x2)
+    end
+
     return rslt, ifig
 end
 
@@ -155,6 +221,8 @@ rslt, ifig = main(ifig)
 open("writing/nhanes_qnn_mpsir_table1.tex", "w") do io
     write(io, latexify(rslt, fmt = "%.2f", env = :table))
 end
+
+CSV.write("nhanes_qnn_mpsir.csv", rslt)
 
 f = [@sprintf("plots/%03d.pdf", j) for j = 0:ifig-1]
 c =

@@ -93,7 +93,7 @@ function qnn_cca(y, xmat, npc, nperm)
     return (eta1, beta1, qhc1, xmat1, s1, sp)
 end
 
-function qnn_mpsir(y, xmat, npc, nmp; nslicex=10, nslicey=10)
+function qnn_mpsir(y, xmat, npc, nmp; nslicex = 10, nslicey = 10)
 
     xmat = copy(xmat)
     center!(xmat)
@@ -137,7 +137,7 @@ function canonical_angles(A, B)
     A, _, _ = svd(A)
     B, _, _ = svd(B)
     _, s, _ = svd(A' * B)
-    return s
+    return acos.(clamp.(s, 0, 1))
 end
 
 #=

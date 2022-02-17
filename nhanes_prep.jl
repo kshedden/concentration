@@ -32,7 +32,7 @@ function zscore!(df, vn)
 end
 
 function select_sex(sex)
-    dx = df[df.RIAGENDR.==sex, :]
+    dx = da[da.RIAGENDR.==sex, :]
     dx = dx[:, [:BPXSY1, :BMXBMI, :RIDAGEYR, :BMXHT]]
     dx = dx[completecases(dx), :]
     zscore!(dx, :RIDAGEYR)

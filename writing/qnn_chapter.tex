@@ -5,19 +5,20 @@ $x \in {\cal R}^d$.
 
 The work presented in this chapter is motivated by questions arising in
 human biology about the relationship between anthropometry (body size)
-and blood pressure.  We provide more background in ###, but briefly, while
-it is well-known that individuals who are taller and/or have greater body
-mass tend to have greater current blood pressure, these relationships
-are modified in complex ways by other factors, including by sex and age.
-Further, when considering longitudinal trajectories of anthropometry
-variables as predictors of subsequent blood pressure (e.g.\ looking
-at anthropometry over the developmental span from birth to adulthood),
-there may be complex inter-relationships among anthropometry variables
-taken at different ages, and among different types of anthropometry
-variables (e.g.\ height and adiposity).  Finally, factors associated with
-either high or low blood pressure may operate differently than factors
-associated with median or mean blood pressure.  This motivates our focus
-on conditional quantiles in this and the subsequent chapter of the thesis.
+and blood pressure.  We provide more background in ###, but briefly,
+while it is well-known that individuals who are taller and/or have
+greater body mass and adiposity tend to have greater blood pressure,
+these relationships are modified in complex ways by other factors,
+including by sex and age.  Further, when considering longitudinal
+trajectories of anthropometry variables as predictors of subsequent blood
+pressure (e.g.\ looking at anthropometry over the developmental span
+from birth to adulthood), there may be complex inter-relationships among
+anthropometry variables taken at different ages, and among different types
+of anthropometry variables (e.g.\ height and adiposity).  Finally, factors
+associated with high or low blood pressure may operate differently than
+factors associated with median or mean blood pressure.  This motivates
+our focus on conditional quantiles in this and the subsequent chapter
+of the thesis.
 
 The quantile nearest neighbor (QNN) algorithm presented in [ref] is
 a local nonparametric estimation procedure for estimating conditional
@@ -31,28 +32,28 @@ bias and variance.  If two observations indexed $i$ and $i^\prime$ are
 neighbors in $G$, then a term $\lambda |\theta_i - \theta_{i^\prime}|$
 is included as an additive penalty with a regularization parameter
 $\lambda > 0$.  The construction of $G$ is based on nearest neighbors
-determined through the covariates in $X$.
+determined through proximity of the covariates in $X$.
 
 QNN seems to have been motivated with prediction as a main goal,
 whereas our goal here is to provide interpretable insight into data
 and the population that they represent.  Doing so is challenging for
 at least three reasons.  First, as considered in more detail below,
-the QNN procedure, like other local estimation procedures, exhibits
-a bias/variance tradeoff.  In general, estimates of conditional
-quantiles based on QNN will exhibit high variance that is related more
-to the neighborhood size than to the overall dataset size.  Also, the
-variance of these estimates tends to be greater than their squared bias.
-In other words, the output of QNN is ``noisy'', especially for extreme
-probability points $p$.  Second, the QNN algorithm provides a voluminous
-output consisting of an estimated conditional quantile $\theta_i$
-for each observation $y_i$, which are somewhat difficult to directly
-interpret in aggregate.  Third, like other local regression procedures,
-QNN suffers from the ``curse of dimensionality'', limiting its use
-with multiple covariates.  For these three reasons, in this chapter
-our main goal is to develop four ways to post-process the results
-of QNN to provide insight about a population of scientific interest.
-Throughout the discussion we use for illustration two datasets relating
-to the relationship between human anthropometry and blood pressure.
+the QNN procedure, like other local estimation procedures, exhibits a
+bias/variance tradeoff.  In general, estimates of conditional quantiles
+based on QNN will exhibit high variance that is related more to the
+neighborhood size than to the overall dataset size.  Also, the variance
+of these estimates tends to be greater than their squared bias.  In other
+words, the output of QNN is ``noisy'', especially for extreme probability
+points $p$.  Second, the QNN algorithm provides a voluminous output
+consisting of an estimated conditional quantile $\theta_i$ for each
+observation $y_i$, which are somewhat difficult to directly interpret
+in aggregate.  Third, like other local regression procedures, QNN suffers
+from the ``curse of dimensionality'', limiting its use with more than a
+few covariates.  For these reasons, in this chapter our main goal is to
+develop four ways to post-process the results of QNN to provide insight
+about a population of scientific interest.  Throughout the discussion we
+use for illustration two datasets relating to the relationship between
+human anthropometry and blood pressure.
 
 \subsection{QNN bias and variance}
 
@@ -63,11 +64,11 @@ based on least squares, reducing the neighborhood size or allowing the
 regularization parameter $\lambda$ to shrink to zero does not produce
 unbiased estimates of the conditional quantiles in QNN.  In fact, as
 $\lambda$ approaches zero, the estimated $\theta_i$ approach $y_i$,
-since this minimizes the check function for any $p$.  Each $y_i$ can be
-interpreted as a median-unbiased estimate of its own true median, but if
-$p\ne 1/2$, setting $\theta_i = y_i$ leads to biased quantile estimates.
-Therefore, the bias/variance tradeoff in QNN is more complicated than
-in local least squares regression.  Following the guidance in [ref]
+since this minimizes the check function for any $p$.  Each $y_i$ can
+be interpreted as a median-unbiased estimate of its own true median,
+but if $p\ne 1/2$, setting $\theta_i = y_i$ leads to biased quantile
+estimates.  Therefore, the bias/variance tradeoff in QNN is more complex
+than in local least squares regression.  Following the guidance in [ref]
 we set $\lambda=0.1$ and build $G$ using neighborhoods of size $5$.
 In this section, we present simulation studies that further explore the
 bias and variance properties of the QNN algorithm.
@@ -81,24 +82,31 @@ After choosing a set of probability points, say $p=[0.1, 0.2, \ldots,
 0.9]$, we can use the QNN approach to estimate each conditional quantile
 in $p$ for all $n$ observations in our sample of data.  This yields
 a $n\times q$ matrix $Q$ (here $q=9$) containing the estimates
-$\hat{Q}_p(y_i; x_i)$.  We note that $Q$ here is an estimate that is a
-function of both the response variable $Y\in {\cal R}^n$ and the matrix
-$X\in {\cal R}^{n\times d}$ of explanatory variables.  A natural goal
-is to assess how the quantiles vary with $X$.  Since the estimated
-quantiles in $Q$ were explicitly constructed using $X$, there is an
-inbuilt relationship between $Q$ and $X$.  The question of interest is
-what form of relationship exists in the population -- that is, were we to
-have the true quantiles $Q_0$, what would be the relationship between $X$
-and $Q_0$?  This will be addressed below using a permutation approach.
+$\hat{Q}_p(y_i; x_i)$.  A natural goal is to assess how the quantiles
+vary with $X$.
 
-\subsubsection{Canonical Correlation Analysis}
+We note that $Q$ here is an estimate that is a function of both the
+response variable $Y\in {\cal R}^n$ and the matrix $X\in {\cal R}^{n\times
+d}$ of explanatory variables.  Since the estimated quantiles in $Q$ were
+explicitly constructed using $X$, there is an inbuilt relationship between
+$Q$ and $X$.  The question of interest is what form of relationship
+exists in the population -- that is, were we to have the true quantiles
+$Q_0$, what would be the relationship between $X$ and $Q_0$?  This will
+be addressed below using a permutation approach.
+
+Apart from the inferential challenges, it is also challenging to interpret
+the raw output of QNN since it is so voluminous.  We present several
+approaches to addressing this challenge below.
+
+\subsubsection{Interpreting quantiles using Canonical Correlation
+Analysis}
 
 Since each row of $Q$ and of $X$ corresponds to an observation, and both
 $Q$ and $X$ have multiple columns, it is natural to consider various
-approaches to multivariate regression.  In this section, we consider
-the classical approach of canonical correlation analysis (CCA), and then
-we consider a more modern dimension-reduction approach that may better
-capture non-linear relationships.
+forms of multivariate regression.  In this section, we consider the
+classical approach of canonical correlation analysis (CCA).  Then in the
+next section we consider a more modern dimension-reduction approach that
+may better capture non-linear relationships.
 
 CCA seeks to find vectors $\beta_1, \ldots, \beta_r$ and $\eta_1, \ldots,
 \eta_r$ such that (i) the vectors $X\beta_j$ are pairwise uncorrelated,
@@ -127,7 +135,40 @@ If $\tilde{\eta}_k$ is a CCA coefficient vector for $\tilde{Q}$ in this
 analysis, then $\eta_k \equiv P\eta_k$ represents the same coefficient
 vector expressed with respect to the original $Q$, for interpretability.
 
-\subsection{Dimension reduction and most-predicable variates}
+\subsection{Dimension reduction and most-predictable variates}
+
+Classical methods for dimension reduction including PCA and CCA are most
+effective at finding approximately linear structure.  To better capture
+nonlinear structure, various nonparametric dimension reduction algorithms
+have been developed.  While most of this literature has focused on the
+familiar setting of a scalar response that is predicted by one or more
+explanatory variables, a few approaches have been devised for the setting
+where both the response and explanatory variables are multivariate.
+Here we consider the ``most-predictable variates'' approach built on
+Sliced Inverse Regression (SIR), denoted here as MP-SIR [ref].  SIR [ref]
+was the first dimension reduction method to be proposed.  It focuses
+on the ``inverse regression function'' $E[x|y]$, and specifically
+on its marginal covariance ${\rm var}E[x|y]$.  The goal is to find a
+matrix $B \in {\cal R}^{p\times d}$ where $x\in {\cal R}^p$, so that
+$B^\prime x$ captures all of the information in $x$ that is relevant for
+predicting $y$.  Formally, we seek $B$ so that $y \indep x | B^\prime x$.
+Under certain conditions, the generalized eigenvalues of $\widehat{\rm
+cov}E[x | y]$ with respect to $\widehat{\rm cov}(x)$ to estimate such
+a basis.  In SIR, $\widehat{\rm cov}[x | y]$ is estimated using a simple
+slicing estimator, and $\widehat{\rm cov}(x)$ is estimated using the
+standard moment estimator.
+
+The MP-SIR approach generalizes SIR to accommodate multivariate responses.
+It is an alternating approach that iteratively applies SIR to $y$ as
+predicted by $B_x^\prime$, and then to $x$ as predicted by $B_y^\prime y$.
+Here, $B_x \in {\cal R}^{p_x\times d_x}$ and $B_y \in {\cal R}^{p_y\times
+d_y}$ are current values of the basis matrices.  The slicing approach
+of SIR is extended to allow slicing on multiple columns.  Under certain
+conditions, $x \indep y | (B_x^\prime x, B_y^\prime y)$, meaning that all
+of the dependence between $x$ and $y$ is captured through the linearly
+reduced variates $B_x^\prime x$, $B_y^\prime y$.  Unlike in CCA, the
+relationships among the reduced $x$ and reduced $y$ variates may be
+substantially nonlinear.
 
 \subsubsection{Rotation}
 
@@ -144,13 +185,14 @@ effects (e.g.\ effects on quantiles at different probability points to
 different extents).  Rotations such as this are an important part of
 classical factor analysis [ref].
 
-To rotate the CCA solution so that the first factor becomes approximately
-constant, we construct a square transformation matrix $F$, then replace
-$\eta$ with $\eta F$, and replace $\beta$ with $\beta F$.  In doing so, we
-wish to preserve the property that the $X$-side scores $X\beta_j$ remain
-pairwise uncorrelated.  It is not possible in general when rotating to
-also preserve pairwise uncorrelatedness of the $Q$-side scores $Q\eta_j$,
-but this is arguably less important for interpretability.
+To rotate the CCA or MP-SIR solution so that the first factor becomes
+approximately constant, we construct a square transformation matrix $F$,
+then replace $\eta$ with $\eta F$, and replace $\beta$ with $\beta F$.
+In doing so, we wish to preserve the property that the $X$-side
+scores $X\beta_j$ remain pairwise uncorrelated.  It is not possible
+in general when rotating to also preserve pairwise uncorrelatedness of
+the $Q$-side scores $Q\eta_j$, but this is arguably less important for
+interpretability.
 
 The rotation algorithm begins by using least squares to regress the first
 $Q$-loading vector $\eta_1$ onto a column of $1's$.  Let $\hat{\eta}_1$
@@ -175,30 +217,32 @@ was constructed.
 
 \subsubsection{Support points}
 
-Interpreting the results of CCA is a somewhat complex task in that we
-must understand how (i) variation in the $X$-scores relates to variation
-in the observed $X$ variables, (ii) variation in the $X$ scores relates
-to variation in the $Y$ scores, and (iii) variation in the $Y$ scores
-relates to variation in the observed $Y$ variables (in our application
-the quantiles $Q$ play the role of $Y$).  In CCA this process is somewhat
-simplified by two facts.  First, the relationships in (ii) are treated
-in CCA as linear (although in reality they may be nonlinear).  Also,
-in standard CCA there are no ``cross-relationships'' in (ii), i.e.\
-the $X$-scores for factor $j$ are uncorrelated with the $Y$-scores for
-factor $j^\prime$ if $j \ne j^\prime$.  After rotating as discussed
-above the second property will no longer hold.
+Interpreting the results of CCA or MP-SIR is a somewhat complex task
+in that we must understand how (i) variation in the $X$-scores relates
+to variation in the observed $X$ variables, (ii) variation in the $X$
+scores relates to variation in the $Y$ scores, and (iii) variation in
+the $Y$ scores relates to variation in the observed $Y$ variables (in
+our application the quantiles $Q$ play the role of $Y$).  In CCA this
+process is somewhat simplified by two facts.  First, the relationships
+in (ii) are treated in CCA as linear (although in reality they may be
+nonlinear).  Also, in standard CCA there are no ``cross-relationships''
+in (ii), i.e.\ the $X$-scores for factor $j$ are uncorrelated with the
+$Y$-scores for factor $j^\prime$ if $j \ne j^\prime$.  However after
+rotating as discussed above the second property will no longer hold.
+In MP-SIR neither of these properties holds.
 
-To aid in the interpretation of the relationships uncovered by CCA,
-we make use of ``support points'' as recently developed [Mak & Joseph].
-Support points are a set of points that are distributed over the important
-regions of a joint distribution.  Using a distance-minimization approach,
-a set of support points of a given size can be constructed that optimally
-cover the support of a distribution.  We construct a limited set of
-support points in the joint space of $X$-scores, say consisting of
-five points.  We then identify a neighborhood of points in the space
+To aid in the interpretation of the relationships uncovered by CCA
+or MP-SIR, we make use of ``support points'' as recently developed
+[Mak & Joseph].  Support points are a set of points that are
+distributed over the important regions of a joint distribution.
+Using a distance-minimization approach, a set of support points of a
+chosen size can be constructed that optimally cover the support of a
+distribution.  For our purposes, we construct a limited set of support
+points in the joint space of $X$-scores, consisting of say five points.
+We then identify a neighborhood of observed data points in the space
 of $X$-scores that fall close to each support point, and average their
-corresponding quantiles.  This produces a nonparametric estimate of
-the expected quantile function corresponding to a given point in the
+corresponding quantiles in $Q$.  This produces a nonparametric estimate
+of the expected quantile function corresponding to a given point in the
 $X$-score space.  By considering 5-10 support points, the relationship
 between explanatory variables $X$ and quantiles $Q$ can be elucidated.
 
@@ -206,43 +250,44 @@ between explanatory variables $X$ and quantiles $Q$ can be elucidated.
 
 [qnn_drr_simstudy.jl]
 
-\subsubsection{NHANES}
+\subsubsection{NHANES analysis}
 
-We analyzed the NHANES data using the procedures describe above,
-with systolic blood pressure as the dependent variable and age, BMI,
-and height as explanatory variables.  The explanatory variables are
-standardized to have mean zero and unit variance.
+We analyzed the blood pressure data from NHANES using the procedures
+describe above, with systolic blood pressure as the dependent variable
+and age, BMI, and height as explanatory variables.  The explanatory
+variables are standardized to have mean zero and unit variance.
 
-Table [nhanes_qnn_drr_table1.tex] contains the results of this
-randomization study.  The results show that for both females and
-for males, the observed correlations are greater than the randomized
-correlations for all factors in the 1 and 2 factor solutions.  In the
-3-factor solution, the third factor is no more correlated with the
-explanatory variables than under randomization.  Thus we focus on the
-2-factor solution below.
+Table [nhanes_qnn_cca_table1.tex] contains the results of the
+randomization analysis for CCA.  The values in column ``R'' are
+correlations for observed data, the values in column ``Rp'' are
+correlations for randomized data.  These results show that for both
+females and for males, the observed correlations are greater than
+the randomized correlations for all factors in the 1, 2, and 3 factor
+solutions.  In the 3-factor solution, the third factor is only slightly
+more correlated with the explanatory variables than under randomization.
+Thus for simplicity we focus primarily on the 2-factor solution below.
 
-The coefficients in table [nhanes_qnn_drr_table1.tex] and the loading
-plots in [nhanes_qnn_drr_loadings.pdf] give insight into the relationship
+The coefficients in table [nhanes_qnn_cca_table1.tex] and the loading
+plots in [nhanes_qnn_cca_loadings.pdf] give insight into the relationship
 between the explanatory variables and the full distribution of blood
-pressure. The rotation procedure successfully constant an approximately
+pressure. The rotation procedure successfully identifies an approximately
 constant loading pattern that becomes the first factor.  Unsurprisingly,
-the positive coefficients for age and BMI indicate that older people
-and people with higher BMI have uniformly greater blood pressure
-quantiles than younger people and people with lower BMI. Height has
-a small coefficient for females, but for males the height coefficient
-approaches the BMI coeffiicent.
+the positive coefficients for age and BMI indicate that older people and
+people with higher BMI have uniformly greater blood pressure quantiles
+than people who are younger and have lower BMI. Height has a small
+coefficient for males in both factors, but for females the height
+coefficient for the second factor is sizeable.
 
 The second factor loading pattern is mostly decreasing and passes through
 zero near the median.  A high positive score against this pattern
 indicates less dispersion in the outcome around its median, while a
-strongly negative score against this pattern indicates more dispersion
-in the outcome around its median.  Inspecting the coefficients we see
-that older people have more negative scores and people with higher
-BMI (and to a lesser extent taller people) have more positive scores.
-This indicates that the conditional quantiles for older people are more
-dispered around the conditional median, and the conditional quantiles
-for people with higher BMI and who are taller are less dispersed around
-the median.  [more could be said here...]
+strongly negative score against this pattern indicates more dispersion in
+the outcome around its median.  Inspecting the coefficients we see that
+older people have more negative scores and people with higher BMI (and to
+a lesser extent taller people) have more positive scores.  This indicates
+that the conditional quantiles for older people are more dispered around
+the conditional median, and the conditional quantiles for people with
+higher BMI and who are taller are less dispersed around the median.
 
 \subsection{Post-processing QNN estimates with low-rank additive
 regression}
