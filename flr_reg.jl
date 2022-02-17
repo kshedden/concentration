@@ -189,9 +189,9 @@ end
 
 function normalizepar!(pa::Params)
     for j in eachindex(pa.beta)
-        f = norm(pa.beta[j])
-        pa.beta[j] ./= f
-        pa.v[:, j] .*= f
+        f = norm(pa.v[:, j])
+        pa.v[:, j] ./= f
+        pa.beta[j] .*= f
     end
 end
 
