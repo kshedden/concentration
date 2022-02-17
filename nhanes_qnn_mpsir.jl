@@ -72,7 +72,7 @@ function runx(sex, nmp, rslt, ifig)
 
     # Get the support points, sort them by increasing x coordinate.
     xp = xmat * beta
-    sp = support([xp[i, :] for i = 1:size(xp, 1)], 5)
+    sp = support([xp[i, :] for i = 1:size(xp, 1)], 6)
     z = [v[1] for v in sp]
     ii = sortperm(z)
     sp = [sp[i] for i in ii]
@@ -114,8 +114,8 @@ function runx(sex, nmp, rslt, ifig)
             # Show the support points with letters.
             for (k, z) in enumerate(sp)
                 PyPlot.text(
-                    z[1],
-                    z[2],
+                    z[j1],
+                    z[j2],
                     string("ABCDEFGH"[k]),
                     size = 14,
                     ha = "center",

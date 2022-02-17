@@ -67,7 +67,7 @@ function runx(sex, npc, rslt, rsltp, ifig)
 
     # Get the support points, sort them by increasing x coordinate.
     xp = xmat * beta
-    spt = support([xp[i, :] for i = 1:size(xp, 1)], 5)
+    spt = support([xp[i, :] for i = 1:size(xp, 1)], 6)
     z = [v[1] for v in spt]
     ii = sortperm(z)
     spt = [spt[i] for i in ii]
