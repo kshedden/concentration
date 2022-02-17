@@ -1,13 +1,12 @@
 #=
 Find support points that represent a distribution.
 
-Given a collection Y of vectors, find a given number
-of support points that capture the range and variation
-within Y.
+Given a collection Y of vectors, find a set of support 
+points of a specified size that capture the distribution
+represented by Y.
 
-The key equation for the algorithm below is equation 22.
-
-Reference:
+The algorithm implemented below is based on equation 22 of
+the following reference:
 
 https://arxiv.org/abs/1609.01811
 =#

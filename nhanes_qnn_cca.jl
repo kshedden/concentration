@@ -96,10 +96,10 @@ function runx(sex, npc, rslt, rsltp, ifig)
             end
 
             # Make it a biplot
-            bs = 2 * beta
+            bs = 2 * beta[:, [j1, j2]]
             for j = 1:3
                 # Move the text so that the arrow ends at the loadings.
-                bs[j, :] .+= 0.2 * bs[j, :] / norm(bs[j, :])
+                bs[j, :] .+= 0.3 * bs[j, :] / norm(bs[j, :])
             end
             PyPlot.gca().annotate(
                 "Age",

@@ -49,7 +49,7 @@ for sex in [2, 1]
     center!(qhc)
 
     sexs = sex == 2 ? "Female" : "Male"
-	println(sexs)
+    println(sexs)
 
     bcca = filter(row -> row.Sex == sexs, beta_cca)
     bcca = bcca[:, 3:end]

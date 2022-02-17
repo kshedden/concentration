@@ -23,13 +23,10 @@ end
 # Probability points for SBP quantiles
 pp = range(0.1, 0.9, length = 9)
 
-# Use two MP-SIR factors.
-nmp = 2
-
 # Neighborhood size for local averaging
 nnb = 50
 
-function runx(sex, rslt, ifig)
+function runx(sex, nmp, rslt, ifig)
 
     # Use one more PC than the number of MP-SIR factors.
     npc = nmp + 1
@@ -74,59 +71,63 @@ function runx(sex, rslt, ifig)
     end
 
     # Get the support points, sort them by increasing x coordinate.
-    u = xmat * beta
-    sp = support([u[i, :] for i = 1:size(u, 1)], 5)
+    xp = xmat * beta
+    sp = support([xp[i, :] for i = 1:size(xp, 1)], 5)
     z = [v[1] for v in sp]
     ii = sortperm(z)
     sp = [sp[i] for i in ii]
 
-    # Plot the second X score against the first X score.  Show the support 
+    # Make a score plot for each pair of X-side factors.  Show the support 
     # points with letters.
-    PyPlot.clf()
-    PyPlot.title(sex == 1 ? "Male" : "Female")
-    PyPlot.grid(true)
-    PyPlot.plot(u[:, 1], u[:, 2], "o", alpha = 0.2, rasterized = true)
+    for j2 = 1:size(beta, 2)
+        for j1 = 1:j2-1
+            PyPlot.clf()
+            PyPlot.title(sex == 1 ? "Male" : "Female")
+            PyPlot.grid(true)
+            PyPlot.plot(xp[:, j1], xp[:, j2], "o", alpha = 0.2, rasterized = true)
 
-    # Make it a biplot
-    bs = 2 * beta
-    for j = 1:3
-        # Move the text so that the arrow ends at the loadings.
-        bs[j, :] .+= 0.2 * bs[j, :] / norm(bs[j, :])
-    end
-    PyPlot.gca().annotate(
-        "Age",
-        xytext = (bs[1, 1], bs[1, 2]),
-        xy = (0, 0),
-        arrowprops = Dict(:arrowstyle => "<-", :shrinkA => 0, :shrinkB => 0),
-    )
-    PyPlot.gca().annotate(
-        "BMI",
-        xytext = (bs[2, 1], bs[2, 2]),
-        xy = (0, 0),
-        arrowprops = Dict(:arrowstyle => "<-", :shrinkA => 0, :shrinkB => 0),
-    )
-    PyPlot.gca().annotate(
-        "Ht",
-        xytext = (bs[3, 1], bs[3, 2]),
-        xy = (0, 0),
-        arrowprops = Dict(:arrowstyle => "<-", :shrinkA => 0, :shrinkB => 0),
-    )
+            # Make it a biplot
+            bs = 2 * beta[:, [j1, j2]]
+            for j = 1:3
+                # Move the text so that the arrow ends at the loadings.
+                bs[j, :] .+= 0.2 * bs[j, :] / norm(bs[j, :])
+            end
+            PyPlot.gca().annotate(
+                "Age",
+                xytext = (bs[1, 1], bs[1, 2]),
+                xy = (0, 0),
+                arrowprops = Dict(:arrowstyle => "<-", :shrinkA => 0, :shrinkB => 0),
+            )
+            PyPlot.gca().annotate(
+                "BMI",
+                xytext = (bs[2, 1], bs[2, 2]),
+                xy = (0, 0),
+                arrowprops = Dict(:arrowstyle => "<-", :shrinkA => 0, :shrinkB => 0),
+            )
+            PyPlot.gca().annotate(
+                "Ht",
+                xytext = (bs[3, 1], bs[3, 2]),
+                xy = (0, 0),
+                arrowprops = Dict(:arrowstyle => "<-", :shrinkA => 0, :shrinkB => 0),
+            )
 
-    # Show the support points with letters.
-    for (k, z) in enumerate(sp)
-        PyPlot.text(
-            z[1],
-            z[2],
-            string("ABCDEFGH"[k]),
-            size = 14,
-            ha = "center",
-            va = "center",
-        )
+            # Show the support points with letters.
+            for (k, z) in enumerate(sp)
+                PyPlot.text(
+                    z[1],
+                    z[2],
+                    string("ABCDEFGH"[k]),
+                    size = 14,
+                    ha = "center",
+                    va = "center",
+                )
+            end
+            PyPlot.ylabel("Covariate score $(j2)", size = 15)
+            PyPlot.xlabel("Covariate score $(j1)", size = 15)
+            PyPlot.savefig(@sprintf("plots/%03d.pdf", ifig))
+            ifig += 1
+        end
     end
-    PyPlot.ylabel("Covariate score 2", size = 15)
-    PyPlot.xlabel("Covariate score 1", size = 15)
-    PyPlot.savefig(@sprintf("plots/%03d.pdf", ifig))
-    ifig += 1
 
     # Plot the quantile trajectories corresponding to each letter
     # in the previous plot.
@@ -193,25 +194,25 @@ function main(ifig)
     )
 
     for sex in [2, 1]
-        rslt, beta, eta, ifig = runx(sex, rslt, ifig)
+        for nmp in [2, 3]
+            rslt, beta, eta, ifig = runx(sex, nmp, rslt, ifig)
 
-        # Save coefficients for comparison to CCA
-        if nmp == 2
-            for (j, c) in enumerate(eachcol(beta))
-                row = [sex == 2 ? "Female" : "Male", j, beta[:, j]...]
-                push!(beta_x2, row)
-            end
-            for (j, c) in enumerate(eachcol(eta))
-                row = [sex == 2 ? "Female" : "Male", j, eta[:, j]...]
-                push!(eta_x2, row)
+            # Save coefficients for comparison to CCA
+            if nmp == 2
+                for (j, c) in enumerate(eachcol(beta))
+                    row = [sex == 2 ? "Female" : "Male", j, beta[:, j]...]
+                    push!(beta_x2, row)
+                end
+                for (j, c) in enumerate(eachcol(eta))
+                    row = [sex == 2 ? "Female" : "Male", j, eta[:, j]...]
+                    push!(eta_x2, row)
+                end
             end
         end
     end
 
-    if nmp == 2
-        CSV.write("beta_mpsir.csv", beta_x2)
-        CSV.write("eta_mpsir.csv", eta_x2)
-    end
+    CSV.write("beta_mpsir.csv", beta_x2)
+    CSV.write("eta_mpsir.csv", eta_x2)
 
     return rslt, ifig
 end
