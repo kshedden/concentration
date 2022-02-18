@@ -11,40 +11,10 @@ include("nhanes_prep.jl")
 
 ifig = 0
 
-sex = 2
-da = select_sex(sex)
-
-# Set up and run the quantile regression
-y = Vector{Float64}(da[:, :BPXSY1])
-X0 = Matrix{Float64}(da[:, [:RIDAGEYR_z, :BMXBMI_z, :BMXHT_z]])
-nn = qreg_nn(y, X0)
-yq = zeros(length(y), 9)
-yqm = zeros(9)
 ppy = collect(range(0.1, 0.9, length = 9))
-for j = 1:9
-    yq[:, j] = fit(nn, ppy[j], 0.1)
-    yqm[j] = mean(yq[:, j])
-    yq[:, j] .-= yqm[j]
-end
-
-pp = collect(range(0.01, 0.99, length = 101))
-qq = quantile(Normal(0, 1), pp)
-
-# Create basis functions for the low-rank model.
-X, Xp = Vector{Matrix{Float64}}(), Vector{Matrix{Float64}}()
-gr = collect(range(-2, 2, length = 101))
-grx = []
-gl = []
-for x0 in eachcol(X0)
-    B, g = genbasis(x0, 5, std(x0) / 2, linear = true)
-    push!(gl, g)
-    push!(X, B)
-    push!(Xp, g(gr))
-    push!(grx, gr)
-end
 
 # Plot the basis functions
-function plot_basis(ifig)
+function plot_basis(Xp, gr, ifig)
     xp = first(Xp)
     PyPlot.clf()
     PyPlot.grid(true)
@@ -54,27 +24,19 @@ function plot_basis(ifig)
     PyPlot.savefig(@sprintf("plots/%03d.pdf", ifig))
     return ifig + 1
 end
-ifig = plot_basis(ifig)
 
-# Fit the low rank model
-cu, cv = 10, 1000
-q = length(X)
-fr = fitlr(X, Xp, yq, cu * ones(q), cv * ones(q))
+function plots1(sex, X, Xp, fr, grx, ifig)
 
-# Check the explained variance
-fv, _ = getfit(X, fr)
-resid = yq - fv
-for j = 1:size(yq, 2)
-    println(@sprintf("%f %f", std(yq[:, j]), std(resid[:, j])))
-end
+    sexs = sex == 2 ? "Female" : "Male"
 
-function plots1(ifig)
+    # Loop over the factors
     for k in eachindex(X)
 
         u = Xp[k] * fr.beta[k]
-        m = u * fr.v[:, k]'
 
+        # Plot the X-side factor loadings
         PyPlot.clf()
+        PyPlot.title(sexs)
         PyPlot.grid(true)
         PyPlot.plot(grx[k], u, "-")
         PyPlot.xlabel(@sprintf("%s Z-score", vnames[k]), size = 15)
@@ -82,7 +44,9 @@ function plots1(ifig)
         PyPlot.savefig(@sprintf("plots/%03d.pdf", ifig))
         ifig += 1
 
+        # Plot the Q-side factor loadings
         PyPlot.clf()
+        PyPlot.title(sexs)
         PyPlot.grid(true)
         PyPlot.plot(ppy, fr.v[:, k], "-")
         if minimum(fr.v[:, k]) > 0
@@ -96,10 +60,13 @@ function plots1(ifig)
         PyPlot.savefig(@sprintf("plots/%03d.pdf", ifig))
         ifig += 1
 
-        mx = maximum(abs, m)
+        # Plot the rank-1 matrix for factor k.
+        mm = u * fr.v[:, k]'
+        mx = maximum(abs, mm)
         PyPlot.clf()
+        PyPlot.title(sexs)
         im = PyPlot.imshow(
-            m,
+            mm,
             interpolation = "nearest",
             aspect = "auto",
             origin = "lower",
@@ -114,10 +81,69 @@ function plots1(ifig)
         PyPlot.savefig(@sprintf("plots/%03d.pdf", ifig))
         ifig += 1
     end
+
     return ifig
 end
 
-ifig = plots1(ifig)
+function runx(sex, ifig)
+
+	sexs = sex == 2 ? "Female" : "Male"
+    da = select_sex(sex)
+
+    # Set up and run the quantile regression
+    y = Vector{Float64}(da[:, :BPXSY1])
+    X0 = Matrix{Float64}(da[:, [:RIDAGEYR_z, :BMXBMI_z, :BMXHT_z]])
+    nn = qreg_nn(y, X0)
+    yq = zeros(length(y), 9)
+    yqm = zeros(9)
+    for j = 1:9
+        yq[:, j] = fit(nn, ppy[j], 0.1)
+        yqm[j] = mean(yq[:, j])
+        yq[:, j] .-= yqm[j]
+    end
+
+    # Create basis functions for the low-rank model.
+    X, Xp = Vector{Matrix{Float64}}(), Vector{Matrix{Float64}}()
+    gr = collect(range(-2, 2, length = 101))
+    grx = []
+    for x0 in eachcol(X0)
+        B, g = genbasis(x0, 5, std(x0) / 2, linear = true)
+        push!(X, B)
+        push!(Xp, g(gr))
+        push!(grx, gr)
+    end
+
+    if sex == 2
+        ifig = plot_basis(Xp, gr, ifig)
+    end
+
+    # Fit the low rank model
+    cu, cv = 10, 1000
+    q = length(X)
+    fr = fitlr(X, Xp, yq, cu * ones(q), cv * ones(q))
+
+    # Check the explained variance
+    fv, _ = getfit(X, fr)
+    resid = yq - fv
+    println("$(sexs) explained variances:")
+    for j = 1:size(yq, 2)
+        println(@sprintf("%f %f", std(yq[:, j]), std(resid[:, j])))
+    end
+    println("")
+
+    ifig = plots1(sex, X, Xp, fr, grx, ifig)
+
+    return ifig
+end
+
+function main(ifig)
+    for sex in [2, 1]
+        ifig = runx(sex, ifig)
+    end
+    return ifig
+end
+
+ifig = main(ifig)
 
 f = [@sprintf("plots/%03d.pdf", j) for j = 0:ifig-1]
 c = `gs -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -sOutputFile=writing/nhanes_reg.pdf $f`
