@@ -1,0 +1,123 @@
+using DataFrames, CSV, Printf, Statistics, UnicodePlots
+using CodecZlib, PyPlot
+
+rm("plots", recursive = true, force = true)
+mkdir("plots")
+
+ifig = 0
+
+include("qreg_nn.jl")
+include("flr_reg.jl")
+include("dogon_utils.jl")
+include("basis.jl")
+include("plot_utils.jl")
+
+# Analyze one sex, at specific childhood and adult ages
+age1 = 5.0
+age2 = 21.0
+
+# childhood body size variable (primary exposure)
+# Possibilities: Ht_Ave_Use, WT, HAZ, WAZ
+#cbs = :Ht_Ave_Use
+cbs = :HAZ
+
+df = open("/home/kshedden/data/Beverly_Strassmann/Cohort_2021.csv.gz") do io
+    CSV.read(GzipDecompressorStream(io), DataFrame)
+end
+
+function make_dataframe(cbs, age1, age2, sex, df)
+    # Get medians of all body size variables, we will focus
+    # our findings by controlling at these values.
+    cq = marg_qnt(cbs, age1, sex, df)
+    hq = marg_qnt(:Ht_Ave_Use, age2, sex, df)
+    bq = marg_qnt(:BMI, age2, sex, df)
+
+    # Control childhood body-size at the conditional median,
+    # with no caliper.
+    vl1 = [vspec(cbs, cq(0.5), Inf)]
+
+    # Control adult body-size at their conditional medians, with
+    # calipers 10cm for height and 2 kg/m^2 for BMI.
+    #vl2 = [vspec(:Ht_Ave_Use, hq(0.5), 10), vspec(:BMI, bq(0.5), 2)]
+    vl2 = [
+        vspec(:BMI, bq(0.5), 2),
+        vspec(:F0_Mom_SBP_Z_Res_USE, 0, Inf),
+        vspec(:Bamako, 0, Inf),
+    ]
+
+    dr = gendat(df, :SBP_MEAN, sex, age1, age2, vl1, vl2; adult_age_caliper = 2)
+
+    # Need to confirm that this is OK
+    dr[!, :Bamako2] = replace(dr[!, :Bamako2], 2 => 1)
+    return dr
+end
+
+function do_all(dr, sex, ifig)
+    yv, xm, xmn, xsd, xna = regmat(:SBP_MEAN, dr, vl1, vl2)
+
+    # The quantile regression model.
+    qr = qreg_nn(yv, xm)
+
+    # Probability points
+    pp = collect(range(0.1, 0.9, length = 9))
+
+    # Fill in the quantiles
+    qh = zeros(length(yv), length(pp))
+    for (j, p) in enumerate(pp)
+        _ = fit(qr, p, 0.1)
+        qh[:, j] = qr.fit
+    end
+
+    # Remove the central axis
+    qhc = copy(qh)
+    qhm = zeros(length(pp))
+    for j = 1:size(qh, 2)
+        qhm[j] = median(qh[:, j])
+        qhc[:, j] .-= qhm[j]
+    end
+
+    # Build basis matrices for the low rank model
+    X, Xp = Vector{Matrix{Float64}}(), Vector{Matrix{Float64}}()
+    gr = collect(range(-2, 2, length = 101))
+    grx = []
+    for x in eachcol(xm)
+        if length(unique(x)) > 2
+            # Not a binary variable
+            B, g = genbasis(x, 5, std(x) / 2, linear = true)
+            push!(X, B)
+            push!(Xp, g(gr))
+        else
+            # A binary variable
+            push!(X, x[:, :])
+            bb = zeros(101)
+            bb[51:end] .= 1
+            push!(Xp, bb[:, :])
+        end
+        push!(grx, gr)
+    end
+
+    # Fit the low-rank model
+    cu = 100 * ones(length(X))
+    cu[end] = 0
+    cv = 100 * ones(9)
+    fr = fitlr(X, Xp, qhc, cu, cv)
+
+    vnames = [string(x) for x in xna]
+    ifig = plots_flr(sex, X, Xp, pp, fr, grx, vnames, ifig)
+    return ifig
+end
+
+function main(ifig)
+    for sex in ["Female", "Male"]
+        dr = make_dataframe(cbs, age1, age2, sex, df)
+        ifig = do_all(dr, sex, ifig)
+    end
+    return ifig
+end
+
+ifig = main(ifig)
+
+f = [@sprintf("plots/%03d.pdf", j) for j = 0:ifig-1]
+c =
+    `gs -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -sOutputFile=writing/dogon_flr_reg.pdf $f`
+run(c)

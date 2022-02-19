@@ -55,8 +55,8 @@ function gendat(
     sex::String,
     age1::Float64,
     age2::Float64,
-    vl1::Array{vspec,1},
-    vl2::Array{vspec,1};
+    vl1::Vector{vspec},
+    vl2::Vector{vspec};
     child_age_caliper = 1.5,
     adult_age_caliper = 1.5,
     single = false,

@@ -82,8 +82,8 @@ function runx(sex, nmp, rslt, ifig)
 
         # Plot the quantile trajectories corresponding to each letter
         # in the previous plot.
-        _, ifig = plot_qtraj(sex, npc, vname, spt, sptl, kt, xmat, qhc, ifig)
-        ifig = plot_qtraj_diff(sex, npc, vname, spt, sptl, kt, xmat, qhc, ifig)
+        _, ifig = plot_qtraj(sex, npc, vname, spt, sptl, kt, xmat, qhc, nnb, ifig)
+        ifig = plot_qtraj_diff(sex, npc, vname, spt, sptl, kt, xmat, qhc, nnb, ifig)
     end
 
     return rslt, beta, eta, ifig

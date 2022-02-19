@@ -8,6 +8,7 @@ include("qreg_nn.jl")
 include("flr_reg.jl")
 include("basis.jl")
 include("nhanes_prep.jl")
+include("plot_utils.jl")
 
 ifig = 0
 
@@ -23,66 +24,6 @@ function plot_basis(Xp, gr, ifig)
     end
     PyPlot.savefig(@sprintf("plots/%03d.pdf", ifig))
     return ifig + 1
-end
-
-function plots1(sex, X, Xp, fr, grx, ifig)
-
-    sexs = sex == 2 ? "Female" : "Male"
-
-    # Loop over the factors
-    for k in eachindex(X)
-
-        u = Xp[k] * fr.beta[k]
-
-        # Plot the X-side factor loadings
-        PyPlot.clf()
-        PyPlot.title(sexs)
-        PyPlot.grid(true)
-        PyPlot.plot(grx[k], u, "-")
-        PyPlot.xlabel(@sprintf("%s Z-score", vnames[k]), size = 15)
-        PyPlot.ylabel(@sprintf("%s PC score", vnames[k]), size = 15)
-        PyPlot.savefig(@sprintf("plots/%03d.pdf", ifig))
-        ifig += 1
-
-        # Plot the Q-side factor loadings
-        PyPlot.clf()
-        PyPlot.title(sexs)
-        PyPlot.grid(true)
-        PyPlot.plot(ppy, fr.v[:, k], "-")
-        if minimum(fr.v[:, k]) > 0
-            PyPlot.ylim(bottom = 0)
-        end
-        if maximum(fr.v[:, k]) < 0
-            PyPlot.ylim(top = 0)
-        end
-        PyPlot.xlabel("SBP probability points", size = 15)
-        PyPlot.ylabel(@sprintf("%s loading", vnames[k]), size = 15)
-        PyPlot.savefig(@sprintf("plots/%03d.pdf", ifig))
-        ifig += 1
-
-        # Plot the rank-1 matrix for factor k.
-        mm = u * fr.v[:, k]'
-        mx = maximum(abs, mm)
-        PyPlot.clf()
-        PyPlot.title(sexs)
-        im = PyPlot.imshow(
-            mm,
-            interpolation = "nearest",
-            aspect = "auto",
-            origin = "lower",
-            extent = [minimum(ppy), maximum(ppy), minimum(grx[k]), maximum(grx[k])],
-            cmap = "bwr",
-            vmin = -mx,
-            vmax = mx,
-        )
-        PyPlot.colorbar()
-        PyPlot.xlabel("SBP quantiles", size = 15)
-        PyPlot.ylabel(@sprintf("%s Z-score", vnames[k]), size = 15)
-        PyPlot.savefig(@sprintf("plots/%03d.pdf", ifig))
-        ifig += 1
-    end
-
-    return ifig
 end
 
 function runx(sex, ifig)
@@ -131,7 +72,7 @@ function runx(sex, ifig)
     end
     println("")
 
-    ifig = plots1(sex, X, Xp, fr, grx, ifig)
+    ifig = plots_flr(sex, X, Xp, ppy, fr, grx, vnames, ifig)
 
     return ifig
 end

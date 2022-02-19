@@ -25,7 +25,7 @@ end
 pp = range(0.1, 0.9, length = 9)
 
 # Number of permutations for stability analysis
-nperm = 1
+nperm = 100
 
 # Number of neighbors for local averaging
 nnb = 100
@@ -83,8 +83,8 @@ function runx(sex, npc, rslt, rsltp, ifig)
 
         # Plot the quantile trajectories corresponding to each letter
         # in the previous plot.
-        rsltp1, ifig = plot_qtraj(sex, npc, vname, spt, sptl, kt, xmat, qhc, ifig)
-        ifig = plot_qtraj_diff(sex, npc, vname, spt, sptl, kt, xmat, qhc, ifig)
+        rsltp1, ifig = plot_qtraj(sex, npc, vname, spt, sptl, kt, xmat, qhc, nnb, ifig)
+        ifig = plot_qtraj_diff(sex, npc, vname, spt, sptl, kt, xmat, qhc, nnb, ifig)
 
         if vx == 1
             for row in rsltp1
