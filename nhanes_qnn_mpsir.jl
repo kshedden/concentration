@@ -10,9 +10,10 @@ include("nhanes_prep.jl")
 include("qreg_nn.jl")
 include("cancorr.jl")
 include("support.jl")
+include("plot_utils.jl")
 
 function run_mpsir(sex, npc, nmp)
-    dx = select_sex(sex)
+    dx = select_nhanes(sex, 18, 40)
     y = dx[:, :BPXSY1]
     y = Vector{Float64}(y)
     xmat = dx[:, [:RIDAGEYR_z, :BMXBMI_z, :BMXHT_z]]
@@ -24,7 +25,7 @@ end
 pp = range(0.1, 0.9, length = 9)
 
 # Neighborhood size for local averaging
-nnb = 50
+nnb = 100
 
 function runx(sex, nmp, rslt, ifig)
 
@@ -32,11 +33,6 @@ function runx(sex, nmp, rslt, ifig)
     npc = nmp + 1
 
     eta, beta, qhc, xmat, eigx, eigy = run_mpsir(sex, npc, nmp)
-
-    # A nearest-neighbor tree for finding neighbors in the 
-    # projected x-space.
-    xp = xmat * beta
-    kt = KDTree(xp')
 
     # Plot the loading patterns for the SBP quantiles.
     PyPlot.clf()
@@ -70,94 +66,25 @@ function runx(sex, nmp, rslt, ifig)
         end
     end
 
-    # Get the support points, sort them by increasing x coordinate.
-    xp = xmat * beta
-    sp = support([xp[i, :] for i = 1:size(xp, 1)], 6)
-    z = [v[1] for v in sp]
-    ii = sortperm(z)
-    sp = [sp[i] for i in ii]
+    for vx = 1:3
 
-    # Make a score plot for each pair of X-side factors.  Show the support 
-    # points with letters.
-    for j2 = 1:size(beta, 2)
-        for j1 = 1:j2-1
-            PyPlot.clf()
-            PyPlot.title(sex == 1 ? "Male" : "Female")
-            PyPlot.grid(true)
-            PyPlot.plot(xp[:, j1], xp[:, j2], "o", alpha = 0.2, rasterized = true)
+        # A nearest-neighbor tree for finding neighbors in the 
+        # projected x-space.
+        xp = xmat * beta
+        kt = KDTree(xp')
 
-            # Make it a biplot
-            bs = 2 * beta[:, [j1, j2]]
-            for j = 1:3
-                # Move the text so that the arrow ends at the loadings.
-                bs[j, :] .+= 0.2 * bs[j, :] / norm(bs[j, :])
-            end
-            PyPlot.gca().annotate(
-                "Age",
-                xytext = (bs[1, 1], bs[1, 2]),
-                xy = (0, 0),
-                arrowprops = Dict(:arrowstyle => "<-", :shrinkA => 0, :shrinkB => 0),
-            )
-            PyPlot.gca().annotate(
-                "BMI",
-                xytext = (bs[2, 1], bs[2, 2]),
-                xy = (0, 0),
-                arrowprops = Dict(:arrowstyle => "<-", :shrinkA => 0, :shrinkB => 0),
-            )
-            PyPlot.gca().annotate(
-                "Ht",
-                xytext = (bs[3, 1], bs[3, 2]),
-                xy = (0, 0),
-                arrowprops = Dict(:arrowstyle => "<-", :shrinkA => 0, :shrinkB => 0),
-            )
+        spt, sptl = make_support(xp, beta, vx, 4)
 
-            # Show the support points with letters.
-            for (k, z) in enumerate(sp)
-                PyPlot.text(
-                    z[j1],
-                    z[j2],
-                    string("ABCDEFGH"[k]),
-                    size = 14,
-                    ha = "center",
-                    va = "center",
-                )
-            end
-            PyPlot.ylabel("Covariate score $(j2)", size = 15)
-            PyPlot.xlabel("Covariate score $(j1)", size = 15)
-            PyPlot.savefig(@sprintf("plots/%03d.pdf", ifig))
-            ifig += 1
-        end
+        # Plot the X scores against each other.  Show the support 
+        # points with letters.
+        vname = ["Age", "BMI", "Height"][vx]
+        ifig = plotxx_all(sex, vname, xp, spt, sptl, beta, ifig)
+
+        # Plot the quantile trajectories corresponding to each letter
+        # in the previous plot.
+        _, ifig = plot_qtraj(sex, npc, vname, spt, sptl, kt, xmat, qhc, ifig)
+        ifig = plot_qtraj_diff(sex, npc, vname, spt, sptl, kt, xmat, qhc, ifig)
     end
-
-    # Plot the quantile trajectories corresponding to each letter
-    # in the previous plot.
-    PyPlot.clf()
-    PyPlot.axes([0.12, 0.12, 0.75, 0.8])
-    PyPlot.title(sex == 1 ? "Male" : "Female")
-    for (j, z) in enumerate(sp)
-
-        # Nearest neighbors of the support point in the projected
-        # X-space.
-        ii, _ = knn(kt, z, nnb)
-
-        row = [
-            sex == 1 ? "Male" : "Female",
-            string("ABCDEFGH"[j]),
-            mean(xmat[ii, :], dims = 1)...,
-        ]
-        push!(rslt, row)
-
-        qp = mean(qhc[ii, :], dims = 1)
-        PyPlot.plot(pp, vec(qp), "-", label = string("ABCDEFGH"[j]))
-    end
-    ha, lb = PyPlot.gca().get_legend_handles_labels()
-    leg = PyPlot.figlegend(ha, lb, "center right")
-    leg.draw_frame(false)
-    PyPlot.grid(true)
-    PyPlot.xlabel("Probability", size = 15)
-    PyPlot.ylabel("SBP quantile deviation", size = 15)
-    PyPlot.savefig(@sprintf("plots/%03d.pdf", ifig))
-    ifig += 1
 
     return rslt, beta, eta, ifig
 end

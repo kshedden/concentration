@@ -87,8 +87,8 @@ end
 
 function runx(sex, ifig)
 
-	sexs = sex == 2 ? "Female" : "Male"
-    da = select_sex(sex)
+    sexs = sex == 2 ? "Female" : "Male"
+    da = select_nhanes(sex, 18, 40)
 
     # Set up and run the quantile regression
     y = Vector{Float64}(da[:, :BPXSY1])

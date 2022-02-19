@@ -33,10 +33,11 @@ function zscore!(df, vn)
     df[!, vz] = (df[:, vn] .- md) ./ (0.67 * mad)
 end
 
-function select_sex(sex)
+function select_nhanes(sex, age1, age2)
     dx = da[da.RIAGENDR.==sex, :]
     dx = dx[:, [:BPXSY1, :BMXBMI, :RIDAGEYR, :BMXHT]]
     dx = dx[completecases(dx), :]
+    dx = filter(row -> row.RIDAGEYR >= age1 && row.RIDAGEYR <= age2, dx)
     zscore!(dx, :RIDAGEYR)
     zscore!(dx, :BMXBMI)
     zscore!(dx, :BMXHT)
