@@ -1,7 +1,7 @@
 using DataFrames, GZip, CSV, Printf, Statistics, UnicodePlots
 
 include("qreg_nn.jl")
-include("functional_lr.jl")
+include("flr_reg.jl")
 include("dogon_utils.jl")
 
 df = GZip.open("/home/kshedden/data/Beverly_Strassmann/Cohort_2021.csv.gz") do io
@@ -30,7 +30,7 @@ vl1 = [vspec(cbs, cq(0.5), Inf)]
 
 # Control adult body-size at their conditional medians, with
 # calipers 10cm for height and 2 kg/m^2 for BMI.
-vl2 = [vs(:Ht_Ave_Use, hq(0.5), 10), vs(:BMI, bq(0.5), 2)]
+vl2 = [vspec(:Ht_Ave_Use, hq(0.5), 10), vspec(:BMI, bq(0.5), 2)]
 
 dr = gendat(sex, age1, age2, vl1, vl2)
 

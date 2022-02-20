@@ -16,43 +16,46 @@ include("plot_utils.jl")
 age1 = 5.0
 age2 = 21.0
 
-# childhood body size variable (primary exposure)
-# Possibilities: Ht_Ave_Use, WT, HAZ, WAZ
-#cbs = :Ht_Ave_Use
-cbs = :HAZ
-
 df = open("/home/kshedden/data/Beverly_Strassmann/Cohort_2021.csv.gz") do io
     CSV.read(GzipDecompressorStream(io), DataFrame)
 end
 
+# Need to confirm that this is OK
+df[!, :Bamako] = replace(df[!, :Bamako], 2 => 1)
+
+function merge_pc_scores(df)
+    pcs = open("dogon_pc_scores.csv") do io
+        CSV.read(io, DataFrame)
+    end
+    pcs = rename(pcs, :id => :ID)
+    na = names(pcs)[2:end]
+    for a in na
+        pcs = rename(pcs, a => Symbol(@sprintf("%s_pcscore", string(a))))
+    end
+    df = outerjoin(df, pcs, on = :ID)
+    return df
+end
+
+df = merge_pc_scores(df)
+
 function make_dataframe(cbs, age1, age2, sex, df)
-    # Get medians of all body size variables, we will focus
-    # our findings by controlling at these values.
-    cq = marg_qnt(cbs, age1, sex, df)
-    hq = marg_qnt(:Ht_Ave_Use, age2, sex, df)
-    bq = marg_qnt(:BMI, age2, sex, df)
+    # Child variables
+    vl1 = vspec[vspec(:HT_pcscore, 0, Inf),]
 
-    # Control childhood body-size at the conditional median,
-    # with no caliper.
-    vl1 = [vspec(cbs, cq(0.5), Inf)]
-
-    # Control adult body-size at their conditional medians, with
-    # calipers 10cm for height and 2 kg/m^2 for BMI.
-    #vl2 = [vspec(:Ht_Ave_Use, hq(0.5), 10), vspec(:BMI, bq(0.5), 2)]
+    # Adult variables
     vl2 = [
-        vspec(:BMI, bq(0.5), 2),
+        vspec(:BMI, 0, Inf),
+        vspec(:Ht_Ave_Use, 0, Inf),
         vspec(:F0_Mom_SBP_Z_Res_USE, 0, Inf),
         vspec(:Bamako, 0, Inf),
     ]
 
     dr = gendat(df, :SBP_MEAN, sex, age1, age2, vl1, vl2; adult_age_caliper = 2)
 
-    # Need to confirm that this is OK
-    dr[!, :Bamako2] = replace(dr[!, :Bamako2], 2 => 1)
-    return dr
+    return (dr, vl1, vl2)
 end
 
-function do_all(dr, sex, ifig)
+function do_all(dr, vl1, vl2, sex, ifig)
     yv, xm, xmn, xsd, xna = regmat(:SBP_MEAN, dr, vl1, vl2)
 
     # The quantile regression model.
@@ -83,6 +86,9 @@ function do_all(dr, sex, ifig)
     for x in eachcol(xm)
         if length(unique(x)) > 2
             # Not a binary variable
+            x = x .- median(x)
+            x = x / median(abs.(x))
+            x /= 0.67
             B, g = genbasis(x, 5, std(x) / 2, linear = true)
             push!(X, B)
             push!(Xp, g(gr))
@@ -109,8 +115,8 @@ end
 
 function main(ifig)
     for sex in ["Female", "Male"]
-        dr = make_dataframe(cbs, age1, age2, sex, df)
-        ifig = do_all(dr, sex, ifig)
+        dr, vl1, vl2 = make_dataframe(cbs, age1, age2, sex, df)
+        ifig = do_all(dr, vl1, vl2, sex, ifig)
     end
     return ifig
 end
