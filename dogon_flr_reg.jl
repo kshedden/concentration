@@ -1,5 +1,5 @@
 using DataFrames, CSV, Printf, Statistics, UnicodePlots
-using CodecZlib, PyPlot
+using CodecZlib, PyPlot, GLM
 
 rm("plots", recursive = true, force = true)
 mkdir("plots")
@@ -40,7 +40,10 @@ df = merge_pc_scores(df)
 
 function make_dataframe(cbs, age1, age2, sex, df)
     # Child variables
-    vl1 = vspec[vspec(:HT_pcscore, 0, Inf),]
+    vl1 = vspec[
+    	vspec(:WT_pcscore, 0, Inf),
+    	#vspec(:HT_pcscore, 0, Inf),
+    	]
 
     # Adult variables
     vl2 = [
@@ -79,6 +82,13 @@ function do_all(dr, vl1, vl2, sex, ifig)
         qhc[:, j] .-= qhm[j]
     end
 
+	# Print out the results of a least squares fit for comparison.
+	mm = lm(xm, qhc[:, 5])
+	ct = coeftable(mm)
+	ct = DataFrame(ct)
+	ct[:, :Name] = [string(x) for x in xna]
+	println(ct)
+	
     # Build basis matrices for the low rank model
     X, Xp = Vector{Matrix{Float64}}(), Vector{Matrix{Float64}}()
     gr = collect(range(-2, 2, length = 101))
