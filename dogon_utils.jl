@@ -61,12 +61,11 @@ function gendat(
     adult_age_caliper = 1.5,
     single = false,
 )
-
     # Always stratify by sex.
     dx = filter(r -> r.Sex == sex, df)
 
     # Get all variable names that we need, except for the outcome.
-    na = [:ID, :Age_Yrs]
+    na = Symbol[:ID, :Age_Yrs]
     push!(na, [x.name for x in vl1]...)
     push!(na, [x.name for x in vl2]...)
     na = unique(na)
@@ -146,12 +145,12 @@ function gendat(
 
     # Include variables measured in childhood (childhood body size)
     for (j, c) in enumerate(vl1)
-        dr[:, Symbol(@sprintf("%s1", c.name))] = vd1[j]
+        dr[:, Symbol("$(c.name)1")] = vd1[j]
     end
 
     # Include variables in adulthood (adult body size)
     for (j, c) in enumerate(vl2)
-        dr[:, Symbol(@sprintf("%s2", c.name))] = vd2[j]
+        dr[:, Symbol("$(c.name)2")] = vd2[j]
     end
 
     return dr
@@ -164,17 +163,23 @@ end
 function regmat(
     dvar::Symbol,
     dr::AbstractDataFrame,
-    vl1::Array{vspec,1},
-    vl2::Array{vspec,1},
+    vl1::AbstractVector{vspec},
+    vl2::AbstractVector{vspec};
+    include_age = true,
 )
-
-    xna = [:Age1, :Age2]
-    push!(xna, [Symbol(@sprintf("%s1", x.name)) for x in vl1]...)
-    push!(xna, [Symbol(@sprintf("%s2", x.name)) for x in vl2]...)
+    xna = if include_age
+        xna = Symbol[:Age1, :Age2]
+        push!(xna, [Symbol("$(x.name)1") for x in vl1]...)
+        push!(xna, [Symbol("$(x.name)2") for x in vl2]...)
+    else
+        xna = Symbol[]
+        push!(xna, [Symbol("$(x.name)") for x in vl1]...)
+        push!(xna, [Symbol("$(x.name)") for x in vl2]...)
+    end
     xna = unique(xna)
 
     xm = dr[:, xna]
-    xm = Array{Float64,2}(xm)
+    xm = Matrix{Float64}(xm)
 
     xmn = mean(xm, dims = 1)
     xsd = std(xm, dims = 1)

@@ -1,9 +1,10 @@
-using CSV, DataFrames, GEE, CodecZlib, Printf, Statistics
-
 #=
-Use GEE to model SBP in terms of current height/weight, early
-childhood growth (PC-scores), and controls.
+Use GEE to model Dogon SBP in terms of current height and BMI, 
+early childhood growth (PC-scores), and control variables.
 =#
+
+using CSV, DataFrames, CodecZlib, Printf, Statistics, UnicodePlots
+using StatsBase, StatsModels, Distributions, GLM, GEE
 
 df = open("/home/kshedden/data/Beverly_Strassmann/Cohort_2021.csv.gz") do io
     CSV.read(GzipDecompressorStream(io), DataFrame)
@@ -36,15 +37,14 @@ df = filter(row -> !ismissing(row.Bamako) && row.Bamako in [0, 1], df)
 # Logarithm of the number of prior BP measurements
 df[:, :lognummeas] = df[:, :lognummeas_BASE10]
 
-function zscore!(dr, vname)
-    dr[:, vname] .-= median(dr[:, vname])
-    x = median(abs.(dr[:, vname]))
-    dr[:, vname] ./= median(x)
-    dr[:, vname] ./= 0.68
+function zscore(x::AbstractVector)::AbstractVector
+    x .-= median(x)
+    x ./= median(abs.(x))
+    x ./= 1.48
+    return x
 end
 
 function check_regression(sex, cbs, adj, df, out)
-
     outcome = "SBP_MEAN"
     cbsv = string(cbs) * "_pcscore"
     xvars = ["BMI", "Ht_Ave_Use", cbsv, "Age_Yrs", "Village1", "lognummeas"]
@@ -58,8 +58,8 @@ function check_regression(sex, cbs, adj, df, out)
 
     # Z-score non-categorical variables
     for x in xvars
-        if !(x in ["Village1"])
-            zscore!(dr, x)
+        if !(x in ["Village1", "Bamako"])
+            dr[:, x] = zscore(dr[:, x])
         end
     end
 
@@ -68,14 +68,7 @@ function check_regression(sex, cbs, adj, df, out)
         dr[:, Symbol("Age_Yrs$(k)")] = dr[:, :Age_Yrs] .^ k
     end
 
-    fnames = [
-        :BMI,
-        :Ht_Ave_Use,
-        Symbol(string(cbs) * "_pcscore"),
-        :Age_Yrs,
-        :Age_Yrs2,
-        :Age_Yrs3,
-    ]
+    fnames = [:BMI, :Ht_Ave_Use, Symbol(cbsv), :Age_Yrs, :Age_Yrs2, :Age_Yrs3]
     if adj == 1
         push!(fnames, :Village1, :lognummeas)
     end
