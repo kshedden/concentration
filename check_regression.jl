@@ -10,6 +10,10 @@ df = open("/home/kshedden/data/Beverly_Strassmann/Cohort_2021.csv.gz") do io
     CSV.read(GzipDecompressorStream(io), DataFrame)
 end
 
+# Indicator that a female is pregnant
+df[!, :Preg] = df[:, :PregMo_Use] .> 0
+df[!, :Preg] = replace(df[!, :Preg], true => 1, false => 0)
+
 function merge_pc_scores(df)
     pcs = open("dogon_pc_scores.csv") do io
         CSV.read(io, DataFrame)
@@ -47,7 +51,13 @@ end
 function check_regression(sex, cbs, adj, df, out)
     outcome = "SBP_MEAN"
     cbsv = string(cbs) * "_pcscore"
-    xvars = ["BMI", "Ht_Ave_Use", cbsv, "Age_Yrs", "Village1", "lognummeas"]
+    xvars = ["BMI", "Ht_Ave_Use", cbsv, "Age_Yrs"]
+    if sex == "Female"
+        push!(xvars, "Preg")
+    end
+    if adj == 1
+        push!(xvars, "Village1", "lognummeas")
+    end
 
     dr = filter(row -> row.Sex == sex, df)
     dr = dr[:, vcat([outcome, "ID"], xvars)]
@@ -58,21 +68,19 @@ function check_regression(sex, cbs, adj, df, out)
 
     # Z-score non-categorical variables
     for x in xvars
-        if !(x in ["Village1", "Bamako"])
+        if !(x in ["Village1", "Bamako", "Preg"])
             dr[:, x] = zscore(dr[:, x])
         end
     end
 
     # Polynomial terms in age
     for k = 2:3
-        dr[:, Symbol("Age_Yrs$(k)")] = dr[:, :Age_Yrs] .^ k
+        s = "Age_Yrs$(k)"
+        dr[:, s] = dr[:, :Age_Yrs] .^ k
+        push!(xvars, s)
     end
 
-    fnames = [:BMI, :Ht_Ave_Use, Symbol(cbsv), :Age_Yrs, :Age_Yrs2, :Age_Yrs3]
-    if adj == 1
-        push!(fnames, :Village1, :lognummeas)
-    end
-    fml = Term(:SBP_MEAN) ~ sum(Term.(fnames))
+    fml = Term(:SBP_MEAN) ~ sum(Term.(Symbol.(xvars)))
     dr = sort(dr, :ID)
     contrasts = Dict(:Village1 => DummyCoding())
     mm = gee(

@@ -32,6 +32,10 @@ df = leftjoin(df, vi, on = :ID)
 # Drop people who are neither in the village nor in Bamako
 df = filter(row -> !ismissing(row.Bamako) && row.Bamako in [0, 1], df)
 
+# Indicator that a female is pregnant
+df[!, :Preg] = df[:, :PregMo_Use] .> 0
+df[!, :Preg] = replace(df[!, :Preg], true => 1, false => 0)
+
 function merge_pc_scores(df)
     pcs = open("dogon_pc_scores.csv") do io
         CSV.read(io, DataFrame)
@@ -50,7 +54,11 @@ df = merge_pc_scores(df)
 function make_dataframe(sex, cbs, mode, df)
     dx = filter(row -> row.Sex == sex, df)
     outcome = :SBP_MEAN
-    vl = [:BMI, :Ht_Ave_Use, Symbol(string(cbs) * "_pcscore"), extra_vars[mode]...]
+    vl =
+        [:Age_Yrs, :BMI, :Ht_Ave_Use, Symbol(string(cbs) * "_pcscore"), extra_vars[mode]...]
+    if sex == "Female"
+        push!(vl, :Preg)
+    end
     dr = dx[:, vcat([outcome], vl)]
     dr = dr[completecases(dr), :]
     for j = 1:size(dr, 2)
@@ -75,9 +83,9 @@ function do_all(dr, vl, sex, ifig)
     xm = Matrix{Float64}(dr[:, vl])
 
     for (j, c) in enumerate(eachcol(xm))
-    	if length(unique(xm[:, j])) > 2
-	        xm[:, j] = zscore(c)
-	    end
+        if length(unique(xm[:, j])) > 2
+            xm[:, j] = zscore(c)
+        end
     end
 
     # The quantile regression model.
@@ -105,7 +113,7 @@ function do_all(dr, vl, sex, ifig)
     X, Xp = Vector{Matrix{Float64}}(), Vector{Matrix{Float64}}()
     gr = collect(range(-2, 2, length = 101))
     grx = []
-    for (j,x) in enumerate(eachcol(xm))
+    for (j, x) in enumerate(eachcol(xm))
         if length(unique(x)) > 2
             # Not a binary variable
             xm[:, j] = zscore(x)

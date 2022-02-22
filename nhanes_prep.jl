@@ -30,7 +30,7 @@ function zscore!(df, vn)
     vz = Symbol(string(vn) * "_z")
     md = median(df[:, vn])
     mad = median(abs.(df[:, vn] .- md))
-    df[!, vz] = (df[:, vn] .- md) ./ (0.67 * mad)
+    df[!, vz] = (df[:, vn] .- md) ./ (1.48 * mad)
 end
 
 function select_nhanes(sex, age1, age2)
