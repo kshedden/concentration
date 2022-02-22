@@ -120,13 +120,17 @@ end
 
 function make_support(xp, beta, vx, npt = 6)
 
+    # Get the support points
     sp = support([copy(r) for r in eachrow(xp)], npt)
+
+    # Sort the support points so the first dimension is increasing
     ii = sortperm([v[1] for v in sp])
     sp = [sp[i] for i in ii]
 
+    # Move each support point 1 unit in the positive or negative
+    # direction for a single covariate.
     ee = zeros(size(beta, 1))
     ee[vx] = 1
-
     spt, sptl = [], []
     for (j, s) in enumerate(sp)
         a = string("ABCDEFGH"[j])
@@ -188,17 +192,11 @@ function plots_flr(sex, X, Xp, ppy, fr, grx, vnames, ifig)
             mx = maximum(abs, mm)
             PyPlot.clf()
             PyPlot.title(sexs)
-            im = PyPlot.imshow(
-                mm,
-                interpolation = "nearest",
-                aspect = "auto",
-                origin = "lower",
-                extent = [minimum(ppy), maximum(ppy), minimum(grx[k]), maximum(grx[k])],
-                cmap = "bwr",
-                vmin = -mx,
-                vmax = mx,
-            )
-            PyPlot.colorbar()
+            xx = ones(length(grx[k])) * ppy'
+            yy = grx[k] * ones(length(ppy))'
+            a = PyPlot.contourf(xx, yy, mm, cmap = "bwr", vmin = -mx, vmax = mx)
+            PyPlot.contour(xx, yy, mm, colors = "grey", vmin = -mx, vmax = mx)
+            PyPlot.colorbar(a)
             PyPlot.xlabel("SBP quantiles", size = 15)
             PyPlot.ylabel(@sprintf("%s Z-score", vnames[k]), size = 15)
             PyPlot.savefig(@sprintf("plots/%03d.pdf", ifig))
