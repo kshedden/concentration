@@ -39,9 +39,9 @@ consisting of all simulated values, pooling over the three values for
 $p$ and over the $m$ replicates (so the overall sample size for the
 least squares fit was $3mn$).  This regression approach was adopted
 since it requires fewer simulation runs than a direct approach
-that estimates the bias as the sample mean of $\hat{Q} - Q$.
-In addition, it gives us more insight into the structure of
-the bias as it relates to factors of interest.
+that estimates the bias as the sample mean of $\hat{Q} - Q$ over
+Monte Carlo replicates. In addition, it gives us more insight into the 
+structure of the bias as it relates to factors of interest.
 
 We noted that in the fitted regressions, the intercepts were very
 small, suggesting that when $p=0.5$ there is minimal bias.  The bias 
