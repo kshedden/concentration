@@ -76,7 +76,7 @@ function simstudy(
     # The true quantiles
     tq = [quantile(Normal(m, s), p) for (m, s) in zip(mu, sd)]
 
-	# The estimated quantiles
+    # The estimated quantiles
     n = size(x, 1)
     qhat = zeros(n, nrep)
     for j = 1:nrep
@@ -86,7 +86,7 @@ function simstudy(
         qhat[:, j] = qr.fit
     end
 
-	# tquant are the true quantiles, qhat are the estimated quantiles
+    # tquant are the true quantiles, qhat are the estimated quantiles
     xx = DataFrame(:tquant => repeat(tq, nrep), :qhat => vec(qhat))
     xx[:, :pc] .= p - 0.5
     return xx
@@ -94,7 +94,7 @@ end
 
 function run_simstudy()
 
-	# Sample size
+    # Sample size
     n = 1500
 
     # Target quantile at which to display results
@@ -107,7 +107,7 @@ function run_simstudy()
                 # Use a fixed set of explanatory variables
                 x = randn(n, d)
 
-				# Get the estimated quantiles
+                # Get the estimated quantiles
                 xa = []
                 for p in [0.5, 0.75, 0.9]
                     xx = simstudy(x, sigma, p, square; nrep = 5, la = 0.1)
@@ -120,25 +120,25 @@ function run_simstudy()
                     xa[j][:, :median] = q50
                 end
 
-				# tdiff is the difference between the true quantile of
-				# interest and the true median.  bias is the estimation
-				# error and its expected value is the bias
+                # tdiff is the difference between the true quantile of
+                # interest and the true median.  bias is the estimation
+                # error and its expected value is the bias
                 xa = vcat(xa...)
                 xa[:, :tdiff] = xa[:, :tquant] - xa[:, :median]
                 xa[:, :bias] = xa[:, :qhat] - xa[:, :tquant]
 
-				# If we change this formula we must change the fitted
-				# relative bias values below.
+                # If we change this formula we must change the fitted
+                # relative bias values below.
                 md = lm(@formula(bias ~ tdiff + tdiff^2 + tdiff^3), xa)
                 println("d=$(d) sigma=$(sigma) square=$(square)")
 
-				# Mainly we are interested in whether c[1] is small,
-				# since this indicates no bias when estimating the
-				# conditional median
+                # Mainly we are interested in whether c[1] is small,
+                # since this indicates no bias when estimating the
+                # conditional median
                 c = coef(md)
                 println("Coefficients:", c)
 
-				# Report results only for the tq'th probability point
+                # Report results only for the tq'th probability point
                 xx = xa[xa[:, :pc].==tq-0.5, :tdiff]
 
                 # These are the fitted relative bias values

@@ -1,7 +1,6 @@
 using Statistics, UnicodePlots, IterTools
 
 include("flr_reg.jl")
-include("flr_tensor.jl")
 include("basis.jl")
 
 function randparams(d, m)
@@ -110,42 +109,6 @@ function test_als_reg()
     end
 end
 
-function test_tensor()
-
-    u = randn(5, 3)
-    v = randn(5, 3)
-    p = size(u, 1)
-    q = size(u, 2)
-    r = q + 1
-
-    for c in eachcol(v)
-        c ./= norm(c)
-    end
-
-    x = zeros(p, p, p, p)
-    for ii in product(Iterators.repeated(1:p, r)...)
-        for k = 1:q
-            x[ii...] += u[ii[k], k] * v[ii[end], k]
-        end
-    end
-
-    X, Xp, Y = setup_tensor(x)
-    cu = zeros(p)
-    cv = zeros(p)
-    pa = fitlr(X, Xp, Y, cu, cv)
-
-    fv, _ = getfit(X, pa)
-
-    @assert maximum(abs.(fv - Y)) < 1e-6
-    for k = 1:q
-        a = pa.beta[k] * pa.v[:, k]'
-        b = u[:, k] * v[:, k]'
-        d = maximum(abs, a - b)
-        @assert d < 1e-8
-    end
-end
-
 test_params()
 test_fit_als()
 test_als_reg()
-test_tensor()
