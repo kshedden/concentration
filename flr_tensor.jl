@@ -1,5 +1,9 @@
 using LinearAlgebra, IterTools
 
+#=
+Takes a tensor x and returns design matrices X, Xp and a response
+matrix Y that can be passed to fitlr (in flr_reg.jl).
+=#
 function setup_tensor(x::AbstractArray)
 
     sx = size(x)
@@ -35,6 +39,10 @@ function setup_tensor(x::AbstractArray)
     return (X, Xp, Y)
 end
 
+#=
+Construct a fitted tensor from the parameters in u, v
+and ca (the central axis).
+=#
 function getfit_tensor(
     u::AbstractMatrix{Float64},
     v::AbstractMatrix{Float64},
@@ -59,22 +67,25 @@ function getfit_tensor(
     return x
 end
 
-
+#=
+Takes a tensor x and removes its central axis.  The
+centered tensor and central axis are returned.
+=#
 function center_tensor(x::Array{Float64})
     sx = size(x)
     @assert minimum(sx) == maximum(sx)
     r = length(sx)
     p = first(sx)
-    k = div(p, 2) + 1
+    p2 = div(p, 2) + 1
     ca = zeros(p)
-    ii = fill(k, r)
+    ii = fill(p2, r)
     for j = 1:p
         ii[end] = j
         ca[j] = x[ii...]
     end
     xx = copy(x)
     for ii in product(Iterators.repeated(1:p, r)...)
-        xx[ii...] = x[ii...] - c[ii[end]]
+        xx[ii...] = x[ii...] - ca[ii[end]]
     end
     return (xx, ca)
 end
