@@ -1,17 +1,23 @@
-using Distributions, UnicodePlots, DataFrames
+#=
+Use simulation to assess performance of the analysis pipeline
+that uses QNN and FLR to understand the conditional quantile
+structure of a population.
+=#
+
+using Distributions, UnicodePlots, DataFrames, CSV
 
 include("flr_tensor.jl")
 include("flr_reg.jl")
 include("qreg_nn.jl")
 
 #=
-Returns a tensor of simulated data (estimated quantiles)
-based on a given sample size (n) and number of covariates
-(p), using the provided functions to define the mean and
-standard deviation for Gaussian values.  Also returns
-the x-values corresponding to each point along the covariate
-axes (gr) and the probability points corresponding to the
-probability axis (the last axis of the tensor).
+Simulate data (y, xm) and use it to fill in a tensor of conditional
+quantiles, estimated using QNN.  The dataset has sample size 'n' and
+'p' covariates, and has conditional mean structure given by
+'meanfunc(x[1])' and conditional standard deviation given by
+'sdfunc(x[2])'.  Also returns the x-values corresponding to each point
+along the covariate axes (gr) and the probability points corresponding
+to the probability axis (the last axis of the tensor).
 =#
 function gendat(n, p, meanfunc, sdfunc)
 
@@ -58,13 +64,13 @@ function gendat(n, p, meanfunc, sdfunc)
         xx[ii...] = predict(qr[ii[end]], z)
     end
 
-    return xx, gr, pp
+    return xm, y, xx, gr, pp
 end
 
 # Generate one dataset and fit the QNN/FLR pipeline
 # to it.
 function simstudy_tensor_run1(n, p, meanfunc, sdfunc)
-    xx, gr, pp = gendat(n, p, meanfunc, sdfunc)
+    xm, y, xx, gr, pp = gendat(n, p, meanfunc, sdfunc)
     m = first(size(xx))
     X, Xp, Y = setup_tensor(xx)
     q = length(X)
@@ -76,7 +82,12 @@ function simstudy_tensor_run1(n, p, meanfunc, sdfunc)
 
     # Estimate the central axis and remove
     # it from the quantiles.
-    ca = mean(Y, dims = 1)[:]
+    qr = qreg_nn(y, xm)
+    ca = zeros(m)
+    for (j, p) in enumerate(pp)
+        fit(qr, p, 0.1)
+        ca[j] = predict(qr, zeros(size(xm, 2)))
+    end
     for j = 1:size(Y, 2)
         Y[:, j] .-= ca[j]
     end
@@ -85,8 +96,8 @@ function simstudy_tensor_run1(n, p, meanfunc, sdfunc)
     pa = fitlr(X, Xp, Y, cu, cv)
 
     # The true central axis
-    ca0 = [quantile(Normal(0, 4), p) for p in pp]
-    rmse_ca = sqrt(mean((ca - ca0) .^ 2))
+    ca0 = [quantile(Normal(0, sdfunc(0)), p) for p in pp]
+    rrmse_ca = sqrt(mean((ca - ca0) .^ 2)) / norm(ca0)
 
     # Get the true u*v' layers of the additive decomposition.
     uv_true1 = meanfunc.(gr) * ones(m)'
@@ -94,43 +105,25 @@ function simstudy_tensor_run1(n, p, meanfunc, sdfunc)
     for i in eachindex(gr)
         s = sdfunc(gr[i])
         for j in eachindex(pp)
-            uv_true2[i, j] = quantile(Normal(0, s), pp[j]) - quantile(Normal(0, 4), pp[j])
+            q1 = quantile(Normal(0, s), pp[j])
+            q2 = quantile(Normal(0, sdfunc(0)), pp[j])
+            uv_true2[i, j] = q1 - q2
         end
     end
     uv_true = [uv_true1, uv_true2]
 
-    cor_uv, rmse_uv = Float64[], Float64[]
+    cor_uv, rrmse_uv = Float64[], Float64[]
     for j = 1:q
         # The estimated rank-1 term for the j'th layer.
         uv_est = Xp[j] * pa.beta[j] * pa.v[:, j]'
         push!(cor_uv, cor(uv_est[:], uv_true[j][:]))
-        push!(rmse_uv, sqrt(mean(uv_est[:] - uv_true[j][:]) .^ 2))
+        push!(rrmse_uv, sqrt(mean(uv_est[:] - uv_true[j][:]) .^ 2) / norm(uv_true[j][:]))
     end
 
-    return rmse_ca, cor_uv, rmse_uv
+    return rrmse_ca, cor_uv, rrmse_uv
 end
 
-
-n = 1500
-p = 2
-nrep = 3
-sdfunc = x -> sqrt((4 + x)^2)
-rslt = DataFrame(
-    :mq => Int[],
-    :p => Int[],
-    :rmse_ca_mean => Float64[],
-    :rmse_ca_sd => Float64[],
-    :cor1_mean => Float64[],
-    :cor1_sd => Float64[],
-    :rmse1_mean => Float64[],
-    :rmse1_sd => Float64[],
-    :cor2_mean => Float64[],
-    :cor2_sd => Float64[],
-    :rmse2_mean => Float64[],
-    :rmse2_sd => Float64[],
-)
-for mq = 1:3
-    meanfunc = x -> x^mq
+function simstudy_tensor_run(n, p, meanfunc, sdfunc, nrep)
     rmse_ca, cor_uv, rmse_uv = [], [], []
     for j = 1:nrep
         rmse_ca1, cor_uv1, rmse_uv1 = simstudy_tensor_run1(n, p, meanfunc, sdfunc)
@@ -138,15 +131,53 @@ for mq = 1:3
         push!(cor_uv, cor_uv1)
         push!(rmse_uv, rmse_uv1)
     end
-    rmse_ca = hcat(rmse_ca...)
-    cor_uv = hcat(cor_uv...)
-    rmse_uv = hcat(rmse_uv...)
-    row = [mq, p, mean(rmse_ca), std(rmse_ca)]
-    for j = 1:2
-        push!(row, mean(cor_uv[j, :]))
-        push!(row, std(cor_uv[j, :]))
-        push!(row, mean(rmse_uv[j, :]))
-        push!(row, std(rmse_uv[j, :]))
-    end
-    push!(rslt, row)
+    return rmse_ca, cor_uv, rmse_uv
 end
+
+n = 1500
+nrep = 10
+sdfunc = x -> sqrt((4 + x)^2)
+
+function main()
+
+    rslt = DataFrame(
+        :mq => Int[],
+        :p => Int[],
+        :rmse_ca_mean => Float64[],
+        :rmse_ca_sd => Float64[],
+        :cor1_mean => Float64[],
+        :cor1_sd => Float64[],
+        :rmse1_mean => Float64[],
+        :rmse1_sd => Float64[],
+        :cor2_mean => Float64[],
+        :cor2_sd => Float64[],
+        :rmse2_mean => Float64[],
+        :rmse2_sd => Float64[],
+    )
+
+    # Consider monomial mean structures
+    for mq = 1:3
+        for p in [2, 4]
+            meanfunc = x -> x^mq
+            rmse_ca, cor_uv, rmse_uv = simstudy_tensor_run(n, p, meanfunc, sdfunc, nrep)
+
+            # Assess accuracy of each factor.
+            rmse_ca = hcat(rmse_ca...)
+            cor_uv = hcat(cor_uv...)
+            rmse_uv = hcat(rmse_uv...)
+            row = [mq, p, mean(rmse_ca), std(rmse_ca)]
+            for j = 1:2
+                push!(row, mean(cor_uv[j, :]))
+                push!(row, std(cor_uv[j, :]))
+                push!(row, mean(rmse_uv[j, :]))
+                push!(row, std(rmse_uv[j, :]))
+            end
+            push!(rslt, row)
+        end
+    end
+
+    return rslt
+end
+
+rslt = main()
+CSV.write("writing/tensor_pipeline_simstudy.csv", rslt)

@@ -27,7 +27,7 @@ function setup_tensor(x::AbstractArray)
     for ii in product(Iterators.repeated(1:p, r)...)
         j = (i - 1) % n + 1
         for k = 1:q
-            if k != p2
+            if ii[k] != p2
                 l = ii[k] < p2 ? ii[k] : ii[k] - 1
                 X[k][j, l] = 1
             end
