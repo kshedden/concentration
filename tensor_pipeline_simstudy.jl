@@ -111,6 +111,10 @@ function simstudy_tensor_run1(n, p, meanfunc, sdfunc)
         end
     end
     uv_true = [uv_true1, uv_true2]
+    xo = zeros(length(gr), length(pp))
+    while length(uv_true) < q
+        push!(uv_true, xo)
+    end
 
     cor_uv, rrmse_uv = Float64[], Float64[]
     for j = 1:q

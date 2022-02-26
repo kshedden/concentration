@@ -48,13 +48,15 @@ tqc = copy(tq)
 center!(tqc)
 u2, s2, v2 = svd(tqc)
 
-function simstudy()
+function simstudy(npc)
 
     # Generate data
     y = mu + sd .* randn(n)
 
-    npc = 2
+	# We are only considering the estimates here so no need to do
+	# permutations
     nperm = 0
+
     eta, beta, qhc, xmat1, ss, sp = qnn_cca(y, xmat, npc, nperm)
 
     # Calculate how accurately we recovered the quantile profiles.
@@ -64,10 +66,11 @@ function simstudy()
     tb = hcat(beta_mean, beta_var)
     a2 = canonical_angles(xmat1 * beta[:, 1:2], xmat * tb)
 
-    return acos.(clamp.(a1, -1, 1)), acos.(clamp.(a2, -1, 1))
+    return a1, a2
 end
 
 nrep = 100
+npc = 3
 eta1_ang = zeros(nrep, 2)
 beta1_ang = zeros(nrep, 2)
 for itr = 1:nrep
@@ -80,4 +83,4 @@ end
 # Matrix that maps solution to population:
 # eta -> eta * F
 # beta1 -> beta1 * F
-F = (beta' * xmat' * xmat * beta) \ (beta' * xmat' * xmat * tb)
+#F = (beta' * xmat' * xmat * beta) \ (beta' * xmat' * xmat * tb)

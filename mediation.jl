@@ -1,4 +1,6 @@
 include("qreg_nn.jl")
+include("flr_reg.jl")
+include("flr_tensor.jl")
 
 # A low rank representation of a quantile model.
 mutable struct QModel
@@ -16,7 +18,8 @@ mutable struct QModel
     # The central axis.
     md::AbstractArray
 
-    # The left 
+    # The left factors of the low rank representation
+    # of the quantiles
     u::AbstractArray
 
     # The right factors of the low rank representation
@@ -48,7 +51,7 @@ mutable struct QModel
     gm2::Any
 end
 
-function mediation_quantiles(yv, xm, pg, exq, m1q, m2q, bw)
+function mediation_quantiles(yv, xm, pg, exq, m1q, m2q)
 
     # Number of probability points to compute quantiles.
     m = length(pg)
@@ -75,13 +78,25 @@ function mediation_quantiles(yv, xm, pg, exq, m1q, m2q, bw)
                     v[3] = exq[i1]
                     v[4] = m1q[i2]
                     v[5] = m2q[i3]
-                    xr[i1, i2, i3, j] = predict_smooth(qr, v, bw)
+                    xr[i1, i2, i3, j] = predict(qr, v)
                 end
             end
         end
     end
 
     return xr
+end
+
+function prep_penalty(cu)
+    if isnothing(cu)
+        return Float64[1, 1, 1]
+    elseif typeof(cu) <: Real
+        return fill(cu, 3)
+    else
+        @assert typeof(cu) <: AbstractVector
+        @assert length(cu) == 3
+        return cu
+    end
 end
 
 function mediation_prep(
@@ -95,13 +110,13 @@ function mediation_prep(
     age2,
     m,
     vlc,
-    vla,
-    bw;
+    vla;
+    cu = nothing,
+    cv = nothing,
     single = false,
     child_age_caliper = 1.5,
     adult_age_caliper = 3,
 )
-
     # Probability points
     pg = collect(range(1 / m, 1 - 1 / m, length = m))
 
@@ -121,6 +136,8 @@ function mediation_prep(
     )
 
     # The exposure is in column 3 of xm.
+    # The columns of xmn are standardized (mean/variance),
+    # yv remains in original data units.
     yv, xm, xmn, xsd, xna = regmat(outcome, dr, vlc, vla)
 
     # Transform from raw coordinates to Z-score coordinates
@@ -129,6 +146,7 @@ function mediation_prep(
     gm2 = x -> (x - xmn[5]) / xsd[5]
 
     # Marginal quantiles for all variables of interest at the target ages
+    # These are in the original data units.
     cq = marg_qnt(cbs, age1, sex, df).(pg)
     hq = marg_qnt(med1, age2, sex, df).(pg)
     bq = marg_qnt(med2, age2, sex, df).(pg)
@@ -140,13 +158,23 @@ function mediation_prep(
 
     # Estimate quantiles for the outcome given exposure
     # and two mediators.
-    xr = mediation_quantiles(yv, xm, pg, zcq, zhq, zbq, bw)
+    xr = mediation_quantiles(yv, xm, pg, zcq, zhq, zbq)
 
     # Remove the quantiles at the median exposure and predictors
-    xc, md = center(xr)
+    # (the central axis).
+    xc, md = center_tensor(xr)
 
     # Fit a low rank model to the estimated quantiles
-    u, v = fit_flr_tensor(xc, fill(1.0, 3), fill(1.0, 3))
+    X, Xp, Q = setup_tensor(xc)
+
+    cu = prep_penalty(cu)
+    cv = prep_penalty(cv)
+    pa = fitlr(X, Xp, Q, cu, cv)
+    v = pa.v
+    u = zeros(m, size(v, 2))
+    for j in eachindex(pa.beta)
+        u[:, j] = Xp[j] * pa.beta[j]
+    end
 
     return QModel(dr, xr, xc, md, u, v, xm, xmn, xsd, xna, cq, hq, bq, gex, gm1, gm2)
 end
@@ -190,7 +218,7 @@ function marginal_qf(med, xm, c, cq, gex, bw, pg)
     cdfm = function (x)
         sn = Normal()
         q = quantile(sn, pg)
-        w = pdf(sn, q .- c) ./ pdf(sn, q)
+        w = pdf.(sn, q .- c) ./ pdf.(sn, q)
         w ./= sum(w)
         mc = 0.0
         for i = 1:m
@@ -220,7 +248,11 @@ mutable struct MediationResult{T<:Real}
     indirect2::Matrix{T}
 end
 
-function mediation(qrm::QModel)
+function mediation(qrm::QModel; bw = nothing)
+
+    if isnothing(bw)
+        bw = Float64[1, 1, 1]
+    end
 
     # Destructure (better syntax in 1.7)
     u, v = qrm.u, qrm.v
@@ -241,8 +273,8 @@ function mediation(qrm::QModel)
     # Marginal quantile function of mediator 1 for perturbed populations
     # of the exposure.
     medh = xmn[4] .+ xsd[4] * xm[:, 4]
-    q1f1 = marginal_qf(medh, xm[:, 1:3], -1.0, qex, gex, bw[1:3], pg)
-    q1f2 = marginal_qf(medh, xm[:, 1:3], 1.0, qex, gex, bw[1:3], pg)
+    q1f1 = marginal_qf(medh, xm[:, 1:3], -1.0, qex, gex, bw, pg)
+    q1f2 = marginal_qf(medh, xm[:, 1:3], 1.0, qex, gex, bw, pg)
 
     # Marginal quantile function of mediator 2 for perturbed populations
     # of the exposure.

@@ -1,11 +1,21 @@
-using DataFrames, GZip, CSV, Printf, Statistics, Distributions, UnicodePlots, Interpolations
+using DataFrames, CodecZlib, CSV, Printf, Statistics
+using Distributions, UnicodePlots, Interpolations
 
 include("qreg_nn.jl")
-include("functional_lr.jl")
+include("flr_tensor.jl")
 include("dogon_utils.jl")
 include("mediation.jl")
+include("plot_utils.jl")
 
-df = GZip.open("/home/kshedden/data/Beverly_Strassmann/Cohort_2021.csv.gz") do io
+rm("plots", recursive = true, force = true)
+mkdir("plots")
+
+ifig = 0
+
+df = open(
+    GzipDecompressorStream,
+    "/home/kshedden/data/Beverly_Strassmann/Cohort_2021.csv.gz",
+) do io
     CSV.read(io, DataFrame)
 end
 
@@ -30,18 +40,25 @@ child_age_caliper = 1.5
 adult_age_caliper = 1.5
 
 # Number of quantile points to track
-m = 5
+m = 11
 
 pg = collect(range(1 / m, 1 - 1 / m, length = m))
 
+mr = mediation(qrm; bw = Float64[1, 1, 1])
+
+ifig = plot_tensor(mr.direct, pg, string(cbs), "Direct effect", ifig)
+ifig = plot_tensor(mr.indirect1, pg, string(med1), "Indirect effect", ifig)
+ifig = plot_tensor(mr.indirect2, pg, string(med2), "Indirect effect", ifig)
+
+f = [@sprintf("plots/%03d.pdf", j) for j = 0:ifig-1]
+c = `gs -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -sOutputFile=dogon_mediation.pdf $f`
+run(c)
+error("")
 # Childhood body size variable.
 vlc = [vspec(cbs, missing, Inf)]
 
 # Adult body size variables.
 vla = [vspec(med1, missing, Inf), vspec(med2, missing, Inf)]
-
-# Bandwidth parameters for quantile smoothing
-bw = fill(1.0, 5)
 
 qrm = mediation_prep(
     df,
@@ -54,11 +71,10 @@ qrm = mediation_prep(
     age2,
     m,
     vlc,
-    vla,
-    bw;
+    vla;
+    cu = 1.0,
+    cv = 1.0,
     single = false,
     child_age_caliper = child_age_caliper,
     adult_age_caliper = adult_age_caliper,
 )
-
-mr = mediation(qrm)

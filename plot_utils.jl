@@ -206,3 +206,34 @@ function plots_flr(sex, X, Xp, ppy, fr, grx, vnames, ifig)
 
     return ifig
 end
+
+function plot_tensor(
+    mm::AbstractMatrix,
+    pp::AbstractVector,
+    xname::String,
+    title::String,
+    ifig::Int,
+)
+
+    # In the provided matrix, the origin is in the upper left corner.
+    # We want to plot as if in quadrant 1.
+    mm = reverse(mm, dims = 1)
+
+    mx = maximum(abs, mm)
+    PyPlot.clf()
+    PyPlot.imshow(
+        mm,
+        interpolation = "nearest",
+        cmap = "bwr",
+        origin = "upper",
+        vmin = -mx,
+        vmax = mx,
+        extent = [0, 1, 0, 1],
+    )
+    PyPlot.colorbar()
+    PyPlot.title(title)
+    PyPlot.xlabel("SBP quantiles", size = 15)
+    PyPlot.ylabel(@sprintf("%s quantiles", xname), size = 15)
+    PyPlot.savefig(@sprintf("plots/%03d.pdf", ifig))
+    return ifig + 1
+end

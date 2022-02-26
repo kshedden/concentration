@@ -94,19 +94,19 @@ function do_all(dr, vl, sex, ifig)
     # Probability points
     pp = collect(range(0.1, 0.9, length = 9))
 
-    # Fill in the quantiles
+    # Fill in the quantiles and estimate the central axis
     qh = zeros(length(yv), length(pp))
+    ca = zeros(length(pp))
     for (j, p) in enumerate(pp)
         _ = fit(qr, p, 0.1)
         qh[:, j] = qr.fit
+        ca[j] = predict(qr, zeros(length(vl)))
     end
 
     # Remove the central axis
     qhc = copy(qh)
-    qhm = zeros(length(pp))
-    for j = 1:size(qh, 2)
-        qhm[j] = median(qh[:, j])
-        qhc[:, j] .-= qhm[j]
+    for j in eachindex(ca)
+        qhc[:, j] .-= ca[j]
     end
 
     # Build basis matrices for the low rank model

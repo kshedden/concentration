@@ -36,10 +36,10 @@ function runx(sex, ifig)
     X0 = Matrix{Float64}(da[:, [:RIDAGEYR_z, :BMXBMI_z, :BMXHT_z]])
     nn = qreg_nn(y, X0)
     yq = zeros(length(y), 9)
-    yqm = zeros(9)
+    yqm = zeros(9) # Central axis
     for j = 1:9
         yq[:, j] = fit(nn, ppy[j], 0.1)
-        yqm[j] = mean(yq[:, j])
+        yqm[j] = predict(nn, zeros(3))
         yq[:, j] .-= yqm[j]
     end
 
