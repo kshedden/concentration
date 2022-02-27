@@ -2,7 +2,15 @@ using LinearAlgebra, Statistics, Dimred
 
 include("qreg_nn.jl")
 
+#=
+Conduct a canonical correlation analysis (CCA) between X and Y.
+The cases are in the rows of X, Y and variables are in the columns.
+Returns 'beta' (the coefficients for X), 'eta' (the coefficients 
+for Y), and the eigenvalues 's'.
+=#
 function cancorr(X, Y)
+
+    @assert size(X, 1) == size(Y, 1)
     n = size(X, 1)
 
     X = copy(X)
@@ -41,6 +49,8 @@ end
 
 function qnn_cca(y, xmat, npc, nperm)
 
+    @assert length(y) == size(xmat, 1)
+    n = length(y)
     xmat = copy(xmat)
     center!(xmat)
 
@@ -52,7 +62,7 @@ function qnn_cca(y, xmat, npc, nperm)
         # On the first iteration, analyze the actual data.
         # Subsequent iterations work with permuted data.
         if k > 1
-            ii = collect(1:size(xmat, 1))
+            ii = collect(1:n)
             shuffle!(ii)
             xmat = xmat[ii, :]
         end
