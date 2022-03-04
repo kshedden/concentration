@@ -24,15 +24,6 @@ da = da[completecases(da), :]
 # Restrict to people aged 18 and over.
 da = da[da.RIDAGEYR.>=18, :]
 
-# Attach a Z-scored version of the variable named 'vn' to
-# the dataframe df.
-function zscore!(df, vn)
-    vz = Symbol(string(vn) * "_z")
-    md = median(df[:, vn])
-    mad = median(abs.(df[:, vn] .- md))
-    df[!, vz] = (df[:, vn] .- md) ./ (1.48 * mad)
-end
-
 function select_nhanes(sex, age1, age2)
     dx = da[da.RIAGENDR.==sex, :]
     dx = dx[:, [:BPXSY1, :BMXBMI, :RIDAGEYR, :BMXHT]]

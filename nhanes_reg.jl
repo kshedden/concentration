@@ -4,7 +4,7 @@ using Distributions, PyPlot
 rm("plots", recursive = true, force = true)
 mkdir("plots")
 
-include("qreg_nn.jl")
+include("utils.jl")
 include("flr_reg.jl")
 include("basis.jl")
 include("nhanes_prep.jl")
@@ -34,11 +34,12 @@ function runx(sex, ifig)
     # Set up and run the quantile regression
     y = Vector{Float64}(da[:, :BPXSY1])
     X0 = Matrix{Float64}(da[:, [:RIDAGEYR_z, :BMXBMI_z, :BMXHT_z]])
-    nn = qreg_nn(y, X0)
+    nn = qregnn(y, X0)
     yq = zeros(length(y), 9)
     yqm = zeros(9) # Central axis
     for j = 1:9
-        yq[:, j] = fit(nn, ppy[j], 0.1)
+        fit!(nn, ppy[j])
+        yq[:, j] = fittedvalues(nn)
         yqm[j] = predict(nn, zeros(3))
         yq[:, j] .-= yqm[j]
     end

@@ -1,5 +1,6 @@
 using LinearAlgebra, CSV, DataFrames
 
+include("utils.jl")
 include("nhanes_prep.jl")
 include("cancorr.jl")
 
@@ -37,11 +38,11 @@ for sex in [2, 1]
     y, xmat = get_xy(sex)
 
     # Get the fitted quantiles
-    qr = qreg_nn(y, xmat)
+    qr = qregnn(y, xmat)
     qh = zeros(length(y), length(pp))
     for (j, p) in enumerate(pp)
-        _ = fit(qr, p, 0.1)
-        qh[:, j] = qr.fit
+        fit!(qr, p)
+        qh[:, j] = fittedvalues(qr)
     end
 
     # Center the fitted quantiles and calculate their dominant factors.

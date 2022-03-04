@@ -101,7 +101,7 @@ function check_regression(sex, cbs, adj, df, out)
     write(out, "\n\n")
 end
 
-out = open("writing/check_regression.txt", "w")
+out = open("writing/gee_regression.txt", "w")
 
 for cbs in [:HT, :WT, :BMI, :HAZ, :WAZ, :BAZ]
     for adj in [0, 1]

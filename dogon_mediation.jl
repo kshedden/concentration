@@ -1,7 +1,6 @@
 using DataFrames, CodecZlib, CSV, Printf, Statistics
 using Distributions, UnicodePlots, Interpolations
 
-include("qreg_nn.jl")
 include("flr_tensor.jl")
 include("dogon_utils.jl")
 include("mediation.jl")
@@ -44,16 +43,6 @@ m = 11
 
 pg = collect(range(1 / m, 1 - 1 / m, length = m))
 
-mr = mediation(qrm; bw = Float64[1, 1, 1])
-
-ifig = plot_tensor(mr.direct, pg, string(cbs), "Direct effect", ifig)
-ifig = plot_tensor(mr.indirect1, pg, string(med1), "Indirect effect", ifig)
-ifig = plot_tensor(mr.indirect2, pg, string(med2), "Indirect effect", ifig)
-
-f = [@sprintf("plots/%03d.pdf", j) for j = 0:ifig-1]
-c = `gs -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -sOutputFile=dogon_mediation.pdf $f`
-run(c)
-error("")
 # Childhood body size variable.
 vlc = [vspec(cbs, missing, Inf)]
 
@@ -78,3 +67,13 @@ qrm = mediation_prep(
     child_age_caliper = child_age_caliper,
     adult_age_caliper = adult_age_caliper,
 )
+
+mr = mediation(qrm; bw = Float64[1, 1, 1])
+
+ifig = plot_tensor(mr.direct, pg, string(cbs), "Direct effect", ifig)
+ifig = plot_tensor(mr.indirect1, pg, string(med1), "Indirect effect", ifig)
+ifig = plot_tensor(mr.indirect2, pg, string(med2), "Indirect effect", ifig)
+
+f = [@sprintf("plots/%03d.pdf", j) for j = 0:ifig-1]
+c = `gs -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -sOutputFile=dogon_mediation.pdf $f`
+run(c)

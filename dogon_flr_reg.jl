@@ -11,61 +11,13 @@ mkdir("plots")
 
 ifig = 0
 
-include("qreg_nn.jl")
 include("flr_reg.jl")
 include("basis.jl")
 include("plot_utils.jl")
+include("dogon_prep.jl")
 
 extra_vars =
     Dict(1 => Symbol[], 2 => Symbol[:lognummeas_BASE10, :F0_Mom_SBP_Z_Res_USE, :Bamako])
-
-df = open("/home/kshedden/data/Beverly_Strassmann/Cohort_2021.csv.gz") do io
-    CSV.read(GzipDecompressorStream(io), DataFrame)
-end
-
-# We want the first village where a person lived
-df = sort(df, :datecomb)
-vi = combine(groupby(df, :ID), :Village => first)
-vi = rename(vi, :Village_first => :Village1)
-df = leftjoin(df, vi, on = :ID)
-
-# Drop people who are neither in the village nor in Bamako
-df = filter(row -> !ismissing(row.Bamako) && row.Bamako in [0, 1], df)
-
-# Indicator that a female is pregnant
-df[!, :Preg] = df[:, :PregMo_Use] .> 0
-df[!, :Preg] = replace(df[!, :Preg], true => 1, false => 0)
-
-function merge_pc_scores(df)
-    pcs = open("dogon_pc_scores.csv") do io
-        CSV.read(io, DataFrame)
-    end
-    pcs = rename(pcs, :id => :ID)
-    na = names(pcs)[2:end]
-    for a in na
-        pcs = rename(pcs, a => Symbol(@sprintf("%s_pcscore", string(a))))
-    end
-    df = outerjoin(df, pcs, on = :ID)
-    return df
-end
-
-df = merge_pc_scores(df)
-
-function make_dataframe(sex, cbs, mode, df)
-    dx = filter(row -> row.Sex == sex, df)
-    outcome = :SBP_MEAN
-    vl =
-        [:Age_Yrs, :BMI, :Ht_Ave_Use, Symbol(string(cbs) * "_pcscore"), extra_vars[mode]...]
-    if sex == "Female"
-        push!(vl, :Preg)
-    end
-    dr = dx[:, vcat([outcome], vl)]
-    dr = dr[completecases(dr), :]
-    for j = 1:size(dr, 2)
-        dr[!, j] = Vector{Float64}(dr[:, j])
-    end
-    return dr, vl
-end
 
 # Standardize a variable so that its median value is zero
 # and its scaled MAD is 1.  If Gaussian its standard deviation 
@@ -89,7 +41,7 @@ function do_all(dr, vl, sex, ifig)
     end
 
     # The quantile regression model.
-    qr = qreg_nn(yv, xm)
+    qr = qregnn(yv, xm)
 
     # Probability points
     pp = collect(range(0.1, 0.9, length = 9))
@@ -98,8 +50,8 @@ function do_all(dr, vl, sex, ifig)
     qh = zeros(length(yv), length(pp))
     ca = zeros(length(pp))
     for (j, p) in enumerate(pp)
-        _ = fit(qr, p, 0.1)
-        qh[:, j] = qr.fit
+        fit!(qr, p)
+        qh[:, j] = fittedvalues(qr)
         ca[j] = predict(qr, zeros(length(vl)))
     end
 
@@ -145,7 +97,7 @@ function main(ifig)
         for sex in ["Female", "Male"]
             for mode in [1, 2]
                 println(cbs, " ", sex, " ", mode)
-                dr, vl = make_dataframe(sex, cbs, mode, df)
+                dr, vl = make_dogon_dataframe(sex, cbs, extra_vars[mode], df)
                 ifig = do_all(dr, vl, sex, ifig)
             end
         end

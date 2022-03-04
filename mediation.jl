@@ -1,4 +1,3 @@
-include("qreg_nn.jl")
 include("flr_reg.jl")
 include("flr_tensor.jl")
 
@@ -58,7 +57,7 @@ function mediation_quantiles(yv, xm, pg, exq, m1q, m2q)
 
     # The quantile regression model for y given an exposure
     # and two mediators.
-    qr = qreg_nn(yv, xm)
+    qr = qregnn(yv, xm)
 
     # Storage for estimated conditional quantiles.
     xr = zeros(m, m, m, m)
@@ -68,7 +67,7 @@ function mediation_quantiles(yv, xm, pg, exq, m1q, m2q)
 
     # Estimate the pg[j]'th quantile of y given the covariates.
     for j = 1:m
-        _ = fit(qr, pg[j], 0.1) # important tuning parameter here
+        fit!(qr, pg[j])
 
         for i1 = 1:m # Exposure
             for i2 = 1:m # First mediator
@@ -187,12 +186,12 @@ function marginal_qf(med, xm, c, cq, gex, bw, pg)
     # The mediator is in raw units, not standardized.
     # The columns of xm are [age1, age2, exposure, med1, med2].
     # All columns of xm are standardized.
-    qr = qreg_nn(med, xm)
+    qr = qregnn(med, xm)
     m = length(pg)
     medcq = zeros(m, m)
     v = zeros(3)
     for i = 1:m
-        _ = fit(qr, pg[i], 0.1) # important tuning parameter here
+        fit!(qr, pg[i]) # important tuning parameter here
         for j = 1:m
             # cq is the unstandardized quantile of the exposure, gex 
             # standardizes it

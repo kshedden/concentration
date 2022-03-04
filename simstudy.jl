@@ -1,6 +1,5 @@
 using Distributions, PyPlot, Printf
 
-include("qreg_nn.jl")
 include("functional_lr.jl")
 
 function sim(n, d, bw, qf, sf, la)
@@ -24,12 +23,12 @@ function sim(n, d, bw, qf, sf, la)
     # Estimated quantiles
     eq = zeros(m, m)
 
-    qr = qreg_nn(y, x)
+    qr = qregnn(y, x)
 
     zz = zeros(d)
     for (j, p) in enumerate(pg)
 
-        fit(qr, p, la)
+        fit!(qr, p; la = la)
 
         for (i, z) in enumerate(xg)
             zz[1] = z

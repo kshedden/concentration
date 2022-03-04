@@ -1,6 +1,4 @@
-using DataFrames, Printf
-
-include("qreg_nn.jl")
+using DataFrames, Printf, QuantileNN
 
 # Specify a variable to match on
 mutable struct vspec
@@ -212,9 +210,9 @@ function marg_qnt(
     y = Vector{Float64}(dx[:, trait])
     x = Vector{Float64}(dx[:, :Age_Yrs])[:, :]
 
-    qr = qreg_nn(y, x)
+    qr = qregnn(y, x)
     f = function (p::Float64)
-        _ = fit(qr, p, la)
+        fit!(qr, p)
         return predict_smooth(qr, [age], [bw])
     end
 

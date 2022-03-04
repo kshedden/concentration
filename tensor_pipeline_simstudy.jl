@@ -4,11 +4,10 @@ that uses QNN and FLR to understand the conditional quantile
 structure of a population.
 =#
 
-using Distributions, UnicodePlots, DataFrames, CSV
+using Distributions, UnicodePlots, DataFrames, CSV, QuantileNN
 
 include("flr_tensor.jl")
 include("flr_reg.jl")
-include("qreg_nn.jl")
 
 #=
 Simulate data (y, xm) and use it to fill in a tensor of conditional
@@ -48,9 +47,9 @@ function gendat(n, p, meanfunc, sdfunc)
     # Fill in the tensor with estimated quantiles.
     # For speed construct a separate QNN for each
     # probability point.
-    qr = [qreg_nn(y, xm) for _ = 1:m]
+    qr = [qregnn(y, xm) for _ = 1:m]
     for j in eachindex(pp)
-        fit(qr[j], pp[j], 0.1)
+        fit!(qr[j], pp[j])
     end
 
     # Create a tensor whose entries are the estimated
@@ -82,10 +81,10 @@ function simstudy_tensor_run1(n, p, meanfunc, sdfunc)
 
     # Estimate the central axis and remove
     # it from the quantiles.
-    qr = qreg_nn(y, xm)
+    qr = qregnn(y, xm)
     ca = zeros(m)
     for (j, p) in enumerate(pp)
-        fit(qr, p, 0.1)
+        fit!(qr, p)
         ca[j] = predict(qr, zeros(size(xm, 2)))
     end
     for j = 1:size(Y, 2)

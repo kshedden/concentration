@@ -1,7 +1,6 @@
 using CSV, GZip, DataFrames, NamedArrays, UnicodePlots, LinearAlgebra, Printf, Statistics
 
 include("functional_lr.jl")
-include("qreg_nn.jl")
 
 pa = "/afs/umich.edu/user/k/s/kshedden/Projects/Beverly_Strassmann/ursps21/cohort.csv.gz"
 
@@ -41,7 +40,7 @@ function quant(out, v, x, age, dx; h = 0.02, lam = 0.1)
     end
 
     for (k, p) in enumerate(pl)
-        qr = qreg_nn(Array(dx[:, out]), dxx, p, lam)
+        qr = qregnn(Array(dx[:, out]), dxx, p)
         for (i, xv) in enumerate(x)
             z = [(age - mn[1]) / sd[1], (xv - mn[2]) / sd[2]]
             ql[i, k] = predict_smooth(qr, z, [1.0, 1.0])
@@ -69,7 +68,7 @@ function quant0(v, age, dx; h = 0.02, lam = 0.1)
 
     z = [age - mn] / sd
     for (k, p) in enumerate(pl)
-        qr = qreg_nn(Array(dx[:, v]), dxx, p, lam)
+        qr = qregnn(Array(dx[:, v]), dxx, p; lam = lam)
         ql[k] = predict_smooth(qr, z, [1.0])
     end
 

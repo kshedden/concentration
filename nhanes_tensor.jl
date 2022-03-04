@@ -11,7 +11,6 @@
 
 using DataFrames, CSV, CodecZlib, Printf, UnicodePlots, LinearAlgebra
 
-include("qreg_nn.jl")
 include("flr_tensor.jl")
 
 dx = []
@@ -53,12 +52,12 @@ function check_tuning1(dx, p)
 
     y = Array{Float64,1}(dx[:, :BMXBMI_z])
     x = Array{Float64,1}(dx[:, :RIDAGEYR_z])[:, :]
-    nn = qreg_nn(y, x)
+    nn = qregnn(y, x)
 
     lam = range(0.01, 0.5, length = 10)
     b = zeros(length(lam))
     for (i, la) in enumerate(lam)
-        _ = fit(nn, p, la)
+        fit!(nn, p)
         b[i] = bic(nn)
     end
 
@@ -72,12 +71,12 @@ function check_tuning2(dx, p)
 
     y = Array{Float64,1}(dx[:, :BPXSY1])
     x = Array{Float64,2}(dx[:, [:RIDAGEYR_z, :BMXBMI_z]])
-    nn = qreg_nn(y, x)
+    nn = qregnn(y, x)
 
     lam = range(0.01, 1, length = 10)
     b = zeros(length(lam))
     for (i, la) in enumerate(lam)
-        _ = fit(nn, p, la)
+        fit!(nn, p)
         b[i] = bic(nn)
     end
 
@@ -102,11 +101,11 @@ for sex in ["female", "male"]
 
     y = Vector{Float64}(dx[:, :BMXBMI])
     x = Matrix{Float64}(dx[:, :RIDAGEYR_z][:, :])
-    nn0 = qreg_nn(y, x)
+    nn0 = qregnn(y, x)
 
     y = Vector{Float64}(dx[:, :BPXSY1])
     x = Matrix{Float64}(dx[:, [:RIDAGEYR_z, :BMXBMI_z]])
-    nn = qreg_nn(y, x)
+    nn = qregnn(y, x)
 
     ages = [25.0, 50.0, 75.0]
     plt0, plt1, plt2 = nothing, nothing, nothing
@@ -117,7 +116,7 @@ for sex in ["female", "male"]
         pr = range(0.1, 0.9, length = 20)
         bmi = zeros(length(pr))
         for (i, p) in enumerate(pr)
-            fit(nn0, p, 0.2)
+            fit!(nn0, p)
             bmi[i] = predict_smooth(nn0, [age_x(age)], [0.5])
         end
 
@@ -138,7 +137,7 @@ for sex in ["female", "male"]
         # Estimate SBP quantiles at each BMI quantile
         sbp = zeros(length(pr), length(pr))
         for (i2, p2) in enumerate(pr)
-            fit(nn, p2, 0.2)
+            fit!(nn, p2)
             for (i1, p1) in enumerate(pr)
                 sbp[i1, i2] = predict_smooth(nn, [age_x(age), bmi_x(bmi[i1])], [0.5, 0.5])
             end

@@ -1,4 +1,4 @@
-using Statistics, DataFrames, Statistics, Random, Latexify
+using Statistics, DataFrames, SupportPoints, Random, Latexify
 using PyPlot, Dimred, UnicodePlots, StatsBase, NearestNeighbors
 
 rm("plots", recursive = true, force = true)
@@ -6,10 +6,9 @@ mkdir("plots")
 
 ifig = 0
 
+include("utils.jl")
 include("nhanes_prep.jl")
-include("qreg_nn.jl")
 include("cancorr.jl")
-include("support.jl")
 include("plot_utils.jl")
 
 function run_mpsir(sex, npc, nmp)
@@ -29,6 +28,8 @@ nnb = 100
 
 function runx(sex, nmp, rslt, ifig)
 
+    sexs = sex == 2 ? "Female" : "Male"
+
     # Use one more PC than the number of MP-SIR factors.
     npc = nmp + 1
 
@@ -38,7 +39,7 @@ function runx(sex, nmp, rslt, ifig)
     PyPlot.clf()
     PyPlot.axes([0.16, 0.13, 0.72, 0.8])
     PyPlot.grid(true)
-    PyPlot.title(sex == 1 ? "Male" : "Female")
+    PyPlot.title(sexs)
     PyPlot.xlabel("Probability point", size = 15)
     PyPlot.ylabel("Loading", size = 15)
     for (j, e) in enumerate(eachcol(eta))
@@ -54,7 +55,7 @@ function runx(sex, nmp, rslt, ifig)
     for j1 = 1:nmp
         for j2 = 1:nmp
             PyPlot.clf()
-            PyPlot.title(sex == 1 ? "Male" : "Female")
+            PyPlot.title(sexs)
             PyPlot.grid(true)
             u1 = xmat * beta[:, j1]
             u2 = qhc * eta[:, j2]
@@ -73,17 +74,17 @@ function runx(sex, nmp, rslt, ifig)
         xp = xmat * beta
         kt = KDTree(xp')
 
-        spt, sptl = make_support(xp, beta, vx, 4)
+        _, spt, sptl = make_support(xp, beta, vx, 4)
 
         # Plot the X scores against each other.  Show the support 
         # points with letters.
         vname = ["Age", "BMI", "Height"][vx]
-        ifig = plotxx_all(sex, vname, xp, spt, sptl, beta, ifig)
+        ifig = plotxx_all(sexs, vname, xp, spt, sptl, beta, ifig)
 
         # Plot the quantile trajectories corresponding to each letter
         # in the previous plot.
-        _, ifig = plot_qtraj(sex, npc, vname, spt, sptl, kt, xmat, qhc, nnb, ifig)
-        ifig = plot_qtraj_diff(sex, npc, vname, spt, sptl, kt, xmat, qhc, nnb, ifig)
+        _, ifig = plot_qtraj(sexs, npc, vname, spt, sptl, kt, xmat, qhc, nnb, ifig)
+        ifig = plot_qtraj_diff(sexs, npc, vname, spt, sptl, kt, xmat, qhc, nnb, ifig)
     end
 
     return rslt, beta, eta, ifig
@@ -121,17 +122,18 @@ function main(ifig)
     )
 
     for sex in [2, 1]
+        sexs = sex == 2 ? "Female" : "Male"
         for nmp in [2, 3]
             rslt, beta, eta, ifig = runx(sex, nmp, rslt, ifig)
 
             # Save coefficients for comparison to CCA
             if nmp == 2
                 for (j, c) in enumerate(eachcol(beta))
-                    row = [sex == 2 ? "Female" : "Male", j, beta[:, j]...]
+                    row = [sexs, j, beta[:, j]...]
                     push!(beta_x2, row)
                 end
                 for (j, c) in enumerate(eachcol(eta))
-                    row = [sex == 2 ? "Female" : "Male", j, eta[:, j]...]
+                    row = [sexs, j, eta[:, j]...]
                     push!(eta_x2, row)
                 end
             end

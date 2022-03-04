@@ -1,6 +1,5 @@
 using DataFrames, GZip, CSV, Printf, Statistics, UnicodePlots
 
-include("qreg_nn.jl")
 include("flr_reg.jl")
 include("dogon_utils.jl")
 
@@ -39,7 +38,7 @@ yv, xm, xmn, xsd, xna = regmat(:SBP, dr, vl1, vl2)
 
 # The quantile regression model for SBP given childhood and
 # adult body size, and other controls.
-qr = qreg_nn(yv, xm)
+qr = qregnn(yv, xm)
 
 # Bandwidth parameters for quantile smoothing
 bw = fill(1.0, size(xm, 2))
@@ -65,7 +64,7 @@ v = zeros(size(xm, 2))
 
 # Fill in all the estimated quantiles.
 for j = 1:m
-    _ = fit(qr, pg[j], 0.1) # important tuning parameter here
+    fit!(qr, pg[j])
     for i = 1:m
         v[3] = xgx[i]
         xr[i, j] = predict_smooth(qr, v, bw)

@@ -6,10 +6,9 @@ mkdir("plots")
 
 ifig = 0
 
+include("utils.jl")
 include("nhanes_prep.jl")
-include("qreg_nn.jl")
 include("cancorr.jl")
-include("support.jl")
 include("plot_utils.jl")
 
 function run_cca(sex, npc, nperm)
@@ -32,6 +31,7 @@ nnb = 100
 
 function runx(sex, npc, rslt, rsltp, ifig)
 
+    sexs = sex == 2 ? "Female" : "Male"
     eta, beta, qhc, xmat, ss, sp = run_cca(sex, npc, nperm)
 
     # Plot the quantile loading patterns
@@ -70,7 +70,7 @@ function runx(sex, npc, rslt, rsltp, ifig)
 
         # Get the support points, sort them by increasing x coordinate.
         xp = xmat * beta
-        spt, sptl = make_support(xp, beta, vx, 4)
+        _, spt, sptl = make_support(xp, beta, vx, 4)
 
         # A nearest-neighbor tree for finding neighborhoods in the
         # projected X-space.
@@ -79,12 +79,12 @@ function runx(sex, npc, rslt, rsltp, ifig)
         # Plot the X scores against each other.  Show the support 
         # points with letters.
         vname = ["Age", "BMI", "Height"][vx]
-        ifig = plotxx_all(sex, vname, xp, spt, sptl, beta, ifig)
+        ifig = plotxx_all(sexs, vname, xp, spt, sptl, beta, ifig)
 
         # Plot the quantile trajectories corresponding to each letter
         # in the previous plot.
-        rsltp1, ifig = plot_qtraj(sex, npc, vname, spt, sptl, kt, xmat, qhc, nnb, ifig)
-        ifig = plot_qtraj_diff(sex, npc, vname, spt, sptl, kt, xmat, qhc, nnb, ifig)
+        rsltp1, ifig = plot_qtraj(sexs, npc, vname, spt, sptl, kt, xmat, qhc, nnb, ifig)
+        ifig = plot_qtraj_diff(sexs, npc, vname, spt, sptl, kt, xmat, qhc, nnb, ifig)
 
         if vx == 1
             for row in rsltp1
@@ -95,7 +95,7 @@ function runx(sex, npc, rslt, rsltp, ifig)
 
     # Save the coefficient estimates and correlation values
     for (j, c) in enumerate(eachcol(beta))
-        row = [sex == 2 ? "Female" : "Male", @sprintf("%d", npc), @sprintf("%d", j)]
+        row = [sexs, @sprintf("%d", npc), @sprintf("%d", j)]
         for a in c
             push!(row, @sprintf("%.2f", a))
         end
@@ -150,18 +150,19 @@ function main(ifig)
         eta9 = Float64[],
     )
     for sex in [2, 1]
-        println("sex=$(sex)")
+        sexs = sex == 2 ? "Female" : "Male"
+        println("sex=$(sex) $(sexs)")
         for npc in [1, 2, 3]
             rslt, rsltp, beta, eta, ifig = runx(sex, npc, rslt, rsltp, ifig)
 
             # Save these for comparison between CCA and MP-SIR
             if npc == 2
                 for (j, c) in enumerate(eachcol(beta))
-                    row = [sex == 2 ? "Female" : "Male", j, beta[:, j]...]
+                    row = [sexs, j, beta[:, j]...]
                     push!(beta_x2, row)
                 end
                 for (j, c) in enumerate(eachcol(eta))
-                    row = [sex == 2 ? "Female" : "Male", j, eta[:, j]...]
+                    row = [sexs, j, eta[:, j]...]
                     push!(eta_x2, row)
                 end
             end

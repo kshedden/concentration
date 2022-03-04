@@ -1,6 +1,4 @@
-using LinearAlgebra, Statistics, Dimred
-
-include("qreg_nn.jl")
+using LinearAlgebra, Statistics, Dimred, QuantileNN, SupportPoints
 
 #=
 Conduct a canonical correlation analysis (CCA) between X and Y.
@@ -68,11 +66,11 @@ function qnn_cca(y, xmat, npc, nperm)
         end
 
         # Get the fitted quantiles
-        qr = qreg_nn(y, xmat)
+        qr = qregnn(y, xmat; dofit = false)
         qh = zeros(length(y), length(pp))
         for (j, p) in enumerate(pp)
-            _ = fit(qr, p, 0.1)
-            qh[:, j] = qr.fit
+            fit!(qr, p)
+            qh[:, j] = fittedvalues(qr)
         end
 
         # Center the fitted quantiles and calculate their dominant factors.
@@ -109,11 +107,11 @@ function qnn_mpsir(y, xmat, npc, nmp; nslicex = 10, nslicey = 10)
     center!(xmat)
 
     # Get the fitted quantiles
-    qr = qreg_nn(y, xmat)
+    qr = qregnn(y, xmat; dofit = false)
     qh = zeros(length(y), length(pp))
     for (j, p) in enumerate(pp)
-        _ = fit(qr, p, 0.1)
-        qh[:, j] = qr.fit
+        StatsBase.fit!(qr, p)
+        qh[:, j] = fittedvalues(qr)
     end
     qhc = copy(qh)
     center!(qhc)
@@ -128,7 +126,7 @@ function qnn_mpsir(y, xmat, npc, nmp; nslicex = 10, nslicey = 10)
     qhcpc = qhc * vpc[:, 1:npc]
 
     mp = MPSIR(qhcpc, xmat)
-    Dimred.fit!(mp, nmp, nmp; nslicex = nslicex, nslicey = nslicey)
+    Dimred.fit!(mp; dx = nmp, dy = nmp, nslicex = nslicex, nslicey = nslicey)
     eta, beta = Dimred.coef(mp)
     eta = vpc[:, 1:npc] * eta
     eigy, eigx = Dimred.eig(mp)

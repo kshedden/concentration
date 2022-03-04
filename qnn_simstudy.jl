@@ -1,7 +1,5 @@
 using UnicodePlots, Statistics, Distributions, Printf, LinearAlgebra
-using DataFrames, GLM
-
-include("qreg_nn.jl")
+using DataFrames, GLM, QuantileNN
 
 #=
 We conducted a limited simulation study to assess the bias in the QNN
@@ -81,9 +79,9 @@ function simstudy(
     qhat = zeros(n, nrep)
     for j = 1:nrep
         y = mu + sd .* randn(n)
-        qr = qreg_nn(y, x)
-        _ = fit(qr, p, la)
-        qhat[:, j] = qr.fit
+        qr = qregnn(y, x)
+        fit!(qr, p)
+        qhat[:, j] = fittedvalues(qr)
     end
 
     # tquant are the true quantiles, qhat are the estimated quantiles

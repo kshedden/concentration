@@ -1,6 +1,5 @@
-using Statistics, Distributions, Printf, LinearAlgebra, DataFrames
+using Statistics, Distributions, Printf, LinearAlgebra, DataFrames, CSV
 
-include("qreg_nn.jl")
 include("cancorr.jl")
 
 # Sample size
@@ -46,7 +45,7 @@ function get_true_quantiles(sd)
     tqc = copy(tq)
     center!(tqc)
     _, s2, v2 = svd(tqc)
-	@assert sum(abs.(s2) .> 1e-8) == 2
+    @assert sum(abs.(s2) .> 1e-8) == 2
 
     return tq, v2
 end
@@ -110,3 +109,5 @@ for sigma in Float64[1, 2]
         push!(rslt, row)
     end
 end
+
+CSV.write("writing/qnn_drr_simstudy.csv", rslt)
