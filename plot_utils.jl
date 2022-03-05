@@ -220,14 +220,6 @@ function plot_qtraj_diffmap(
     yy, ym, pcl = diff_support(sp::AbstractVector, spt, kt, qhc; nnb = nnb)
     spm = hcat(sp...)'
 
-    # Select the dominant components
-    xx = spm[:, [1, 2]]
-    xlim = [minimum(xx[:, 1]), maximum(xx[:, 1])]
-    ylim = [minimum(xx[:, 2]), maximum(xx[:, 2])]
-
-    nn = 20
-    z = loclin2d(yy, xx, xlim, ylim, nn, nn, [2.0, 2.0])
-
     # Plot the mean
     PyPlot.clf()
     PyPlot.title(@sprintf("Manipulate %s %s", sex, vname))
@@ -258,21 +250,37 @@ function plot_qtraj_diffmap(
     PyPlot.savefig(@sprintf("plots/%03d.pdf", ifig))
     ifig += 1
 
-    # Plot the scores
-    PyPlot.clf()
-    PyPlot.title(@sprintf("Manipulate %s %s", sex, vname))
-    mx = maximum(abs, z)
-    xx = ones(size(z, 1)) * range(xlim[1], xlim[2], length = nn)'
-    yy = range(ylim[1], ylim[2], length = nn) * ones(size(z, 2))'
-    a = PyPlot.contourf(xx, yy, z, cmap = "bwr", vmin = -mx, vmax = mx)
-    PyPlot.contour(xx, yy, z, colors = "grey", vmin = -mx, vmax = mx)
-    PyPlot.colorbar(a)
+    for j1 = 1:size(spm, 2)
+        for j2 = j1+1:size(spm, 2)
 
-    PyPlot.xlabel("Covariate factor 1", size = 15)
-    PyPlot.ylabel("Covariate factor 2", size = 15)
-    PyPlot.savefig(@sprintf("plots/%03d.pdf", ifig))
+            # Select the dominant components
+            xx = spm[:, [j1, j2]]
+            xlim = [minimum(xx[:, 1]), maximum(xx[:, 1])]
+            ylim = [minimum(xx[:, 2]), maximum(xx[:, 2])]
 
-    return ifig + 1
+            # Create a 2d map corresponding to two of the x-variates.
+            nn = 20
+            bw = Float64[2, 2]
+            z = loclin2d(yy, xx, xlim, ylim, nn, nn, bw)
+
+            # Plot the scores
+            PyPlot.clf()
+            PyPlot.title(@sprintf("Manipulate %s %s", sex, vname))
+            mx = maximum(abs, z)
+            x0 = ones(size(z, 1)) * range(xlim[1], xlim[2], length = nn)'
+            y0 = range(ylim[1], ylim[2], length = nn) * ones(size(z, 2))'
+            a = PyPlot.contourf(x0, y0, z, cmap = "bwr", vmin = -mx, vmax = mx)
+            PyPlot.contour(x0, y0, z, colors = "grey", vmin = -mx, vmax = mx)
+            PyPlot.colorbar(a)
+
+            PyPlot.xlabel(@sprintf("Covariate factor %d", j1), size = 15)
+            PyPlot.ylabel(@sprintf("Covariate factor %d", j2), size = 15)
+            PyPlot.savefig(@sprintf("plots/%03d.pdf", ifig))
+            ifig += 1
+        end
+    end
+
+    return ifig
 end
 
 function plots_flr(sex, X, Xp, ppy, fr, grx, vnames, ifig)
