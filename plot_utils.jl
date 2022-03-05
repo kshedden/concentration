@@ -1,10 +1,10 @@
 using PyPlot, SupportPoints, NearestNeighbors, QuantileNN
 
 # Plot two X-side scores against each other as a biplot.
-function plotxx(sex, vname, xp, spt, sptl, beta, j1, j2, ifig)
+function plotxx(sex, vnames, vx, xp, spt, sptl, beta, j1, j2, ifig)
 
     PyPlot.clf()
-    PyPlot.title(@sprintf("%s %s contrasts", sex, vname))
+    PyPlot.title(@sprintf("%s %s contrasts", sex, vnames[vx]))
     PyPlot.grid(true)
     PyPlot.plot(xp[:, j1], xp[:, j2], "o", alpha = 0.2, rasterized = true)
     for (k, z) in enumerate(spt)
@@ -13,31 +13,19 @@ function plotxx(sex, vname, xp, spt, sptl, beta, j1, j2, ifig)
 
     # Make it a biplot
     bs = 2 * beta[:, [j1, j2]]
-    for j = 1:3
-        # Move the text so that the arrow ends at the loadings.
-        bs[j, :] .+= 0.3 * bs[j, :] / norm(bs[j, :])
+    for j in eachindex(vnames)
+        PyPlot.gca().annotate(
+            vnames[j],
+            xytext = (bs[j, 1], bs[j, 2]),
+            xy = (0, 0),
+            arrowprops = Dict(:arrowstyle => "<-", :shrinkA => 0, :shrinkB => 0),
+            ha = "center",
+            va = "center",
+        )
     end
-    PyPlot.gca().annotate(
-        "Age",
-        xytext = (bs[1, 1], bs[1, 2]),
-        xy = (0, 0),
-        arrowprops = Dict(:arrowstyle => "<-", :shrinkA => 0, :shrinkB => 0),
-    )
-    PyPlot.gca().annotate(
-        "BMI",
-        xytext = (bs[2, 1], bs[2, 2]),
-        xy = (0, 0),
-        arrowprops = Dict(:arrowstyle => "<-", :shrinkA => 0, :shrinkB => 0),
-    )
-    PyPlot.gca().annotate(
-        "Ht",
-        xytext = (bs[3, 1], bs[3, 2]),
-        xy = (0, 0),
-        arrowprops = Dict(:arrowstyle => "<-", :shrinkA => 0, :shrinkB => 0),
-    )
 
-    PyPlot.ylabel(@sprintf("Covariate score %d", j2), size = 15)
-    PyPlot.xlabel(@sprintf("Covariate score %d", j1), size = 15)
+    PyPlot.ylabel(@sprintf("Covariate factor %d score", j2), size = 15)
+    PyPlot.xlabel(@sprintf("Covariate factor %d score", j1), size = 15)
     PyPlot.savefig(@sprintf("plots/%03d.pdf", ifig))
     ifig += 1
 end
@@ -100,16 +88,16 @@ function plot_qtraj_diff(sex, npc, vname, spt, sptl, kt, xmat, qhc, nnb, ifig)
     leg.draw_frame(false)
     PyPlot.grid(true)
     PyPlot.xlabel("Probability", size = 15)
-    PyPlot.ylabel("SBP quantile deviation", size = 15)
+    PyPlot.ylabel("SBP quantile difference", size = 15)
     PyPlot.savefig(@sprintf("plots/%03d.pdf", ifig))
 
     return ifig + 1
 end
 
-function plotxx_all(sex, vname, xp, spt, sptl, beta, ifig)
+function plotxx_all(sex, vnames, vx, xp, spt, sptl, beta, ifig)
     for j2 = 1:size(beta, 2)
         for j1 = 1:j2-1
-            ifig = plotxx(sex, vname, xp, spt, sptl, beta, j1, j2, ifig)
+            ifig = plotxx(sex, vnames, vx, xp, spt, sptl, beta, j1, j2, ifig)
         end
     end
     return ifig
@@ -126,15 +114,13 @@ function make_support(xp, beta, vx, npt = 6)
 
     # Move each support point 1 unit in the positive or negative
     # direction for a single covariate.
-    ee = zeros(size(beta, 1))
-    ee[vx] = 1
     spt, sptl = [], []
     for (j, s) in enumerate(sp)
         # Only 10 distinct labels
-        a = string("ABCDEFGHIJ"[1+(j%10)])
-        push!(spt, s + beta' * ee)
+        a = string("ABCDEFGHIJ"[1+((j-1)%10)])
+        push!(spt, s + beta[vx, :])
         push!(sptl, a)
-        push!(spt, s - beta' * ee)
+        push!(spt, s - beta[vx, :])
         push!(sptl, "$(a)'")
     end
 
@@ -150,7 +136,6 @@ function loclin2d(
     ny::Int,
     bw::AbstractVector,
 )
-
     @assert length(y) == size(X, 1)
     xs = collect(range(xlim[1], xlim[2], length = nx))
     ys = collect(range(ylim[1], ylim[2], length = ny))
@@ -171,7 +156,7 @@ function loclin2d(
             ww .= exp.(-(dx2 + dy2) / 2)
             ww ./= sum(ww)
             b = (xx' * diagm(ww) * xx) \ (xx' * y)
-            z[i, j] = b[1]
+            z[j, i] = b[1]
         end
     end
     return z
@@ -203,17 +188,22 @@ function diff_support(
 
     # The rows contain all of the difference profiles
     qm = hcat(qpl...)'
-    for c in eachcol(qm)
-        c .-= mean(c)
+    qmm = mean(qm, dims = 1)[:]
+    for j = 1:size(qm, 2)
+        qm[:, j] .-= qmm[j]
     end
 
     u, s, v = svd(qm)
-    if sum(v[:, 1] .> 0) < sum(v[:, 1] .< 0)
-        v[:, 1] .*= -1
-        u[:, 1] .*= -1
+
+    # Flip the dominant factors for interpretability
+    for j = 1:2
+        if sum(v[:, j] .> 0) < sum(v[:, j] .< 0)
+            v[:, j] .*= -1
+            u[:, j] .*= -1
+        end
     end
 
-    return u[:, 1]
+    return u[:, 1], qmm, v[:, 1]
 end
 
 function plot_qtraj_diffmap(
@@ -221,20 +211,65 @@ function plot_qtraj_diffmap(
     spt::AbstractVector,
     kt::KDTree,
     qhc::AbstractMatrix,
+    pp::AbstractVector,
+    vname::String,
+    sex::String,
     ifig::Int;
     nnb = 100,
 )
-
-    yy = diff_support(sp::AbstractVector, spt, kt, qhc; nnb = nnb)
+    yy, ym, pcl = diff_support(sp::AbstractVector, spt, kt, qhc; nnb = nnb)
     spm = hcat(sp...)'
+
+    # Select the dominant components
     xx = spm[:, [1, 2]]
     xlim = [minimum(xx[:, 1]), maximum(xx[:, 1])]
     ylim = [minimum(xx[:, 2]), maximum(xx[:, 2])]
 
-    z = loclin2d(yy, xx, xlim, ylim, 20, 20, [1.0, 1.0])
+    nn = 20
+    z = loclin2d(yy, xx, xlim, ylim, nn, nn, [2.0, 2.0])
 
+    # Plot the mean
     PyPlot.clf()
-    PyPlot.imshow(z, interpolation = "nearest")
+    PyPlot.title(@sprintf("Manipulate %s %s", sex, vname))
+    PyPlot.grid(true)
+    PyPlot.plot(pp, ym)
+    if minimum(ym) > 0
+        PyPlot.ylim(ymin = 0)
+    elseif maximum(ym) < 0
+        PyPlot.ylim(ymax = 0)
+    end
+    PyPlot.xlabel("SBP quantiles", size = 15)
+    PyPlot.ylabel("Mean", size = 15)
+    PyPlot.savefig(@sprintf("plots/%03d.pdf", ifig))
+    ifig += 1
+
+    # Plot the loadings
+    PyPlot.clf()
+    PyPlot.title(@sprintf("Manipulate %s %s", sex, vname))
+    PyPlot.grid(true)
+    PyPlot.plot(pp, pcl)
+    if minimum(pcl) > 0
+        PyPlot.ylim(ymin = 0)
+    elseif maximum(pcl) < 0
+        PyPlot.ylim(ymax = 0)
+    end
+    PyPlot.xlabel("SBP quantiles", size = 15)
+    PyPlot.ylabel("Loading", size = 15)
+    PyPlot.savefig(@sprintf("plots/%03d.pdf", ifig))
+    ifig += 1
+
+    # Plot the scores
+    PyPlot.clf()
+    PyPlot.title(@sprintf("Manipulate %s %s", sex, vname))
+    mx = maximum(abs, z)
+    xx = ones(size(z, 1)) * range(xlim[1], xlim[2], length = nn)'
+    yy = range(ylim[1], ylim[2], length = nn) * ones(size(z, 2))'
+    a = PyPlot.contourf(xx, yy, z, cmap = "bwr", vmin = -mx, vmax = mx)
+    PyPlot.contour(xx, yy, z, colors = "grey", vmin = -mx, vmax = mx)
+    PyPlot.colorbar(a)
+
+    PyPlot.xlabel("Covariate factor 1", size = 15)
+    PyPlot.ylabel("Covariate factor 2", size = 15)
     PyPlot.savefig(@sprintf("plots/%03d.pdf", ifig))
 
     return ifig + 1
