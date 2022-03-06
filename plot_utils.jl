@@ -1,14 +1,37 @@
 using PyPlot, SupportPoints, NearestNeighbors, QuantileNN
 
 # Plot two X-side scores against each other as a biplot.
-function plotxx(sex, vnames, vx, xp, spt, sptl, beta, j1, j2, ifig)
+function plotxx(sex, vnames, vx, xp, sp, spl, spt, sptl, beta, j1, j2, ifig)
 
     PyPlot.clf()
     PyPlot.title(@sprintf("%s %s contrasts", sex, vnames[vx]))
     PyPlot.grid(true)
     PyPlot.plot(xp[:, j1], xp[:, j2], "o", alpha = 0.2, rasterized = true)
-    for (k, z) in enumerate(spt)
-        PyPlot.text(z[j1], z[j2], sptl[k], size = 14, ha = "center", va = "center")
+
+	# Draw a grey line connecting each pair of contrasting points
+	cpa = PyPlot.matplotlib.patches.ConnectionPatch
+	ax = PyPlot.gca()
+	for k in 1:size(sp, 2)
+		j = 2*(k-1) + 1
+		xs = [spt[j1, j], spt[j1, j+1]]
+		ys = [spt[j2, j], spt[j2, j+1]]
+		rr = sqrt(40)
+		PyPlot.plot(xs[1:1], ys[1:1], "+", color="grey", mfc="none", ms=rr, zorder=10)
+		PyPlot.plot(xs[1:1], ys[1:1], "o", color="grey", mfc="none", ms=rr, zorder=10)
+		PyPlot.plot(xs[2:2], ys[2:2], "_", color="grey", mfc="none", ms=rr, zorder=10)
+		PyPlot.plot(xs[2:2], ys[2:2], "o", color="grey", mfc="none", ms=rr, zorder=10)
+
+		# https://stackoverflow.com/questions/58490203/matplotlib-plot-a-line-with-open-markers-where-the-line-is-not-visible-within
+    	cp = cpa((xs[1], ys[1]), (xs[2], ys[2]), 
+                 coordsA="data", coordsB="data", axesA=ax, axesB=ax,
+                 shrinkA=rr/2, shrinkB=rr/2,
+                 color="grey", zorder=10)
+        ax.add_patch(cp)
+	end
+
+	# Draw a label for each contrasting pair
+    for (k, z) in enumerate(eachcol(sp))
+        PyPlot.text(z[j1], z[j2], spl[k], size = 14, ha = "center", va = "center", zorder=11)
     end
 
     # Make it a biplot
@@ -36,7 +59,7 @@ function plot_qtraj(sex, npc, vname, spt, sptl, kt, xmat, qhc, nnb, ifig)
     PyPlot.clf()
     PyPlot.axes([0.12, 0.12, 0.75, 0.8])
     PyPlot.title(@sprintf("%s %s contrasts", sex, vname))
-    for (j, z) in enumerate(spt)
+    for (j, z) in enumerate(eachcol(spt))
 
         # Nearest neighbors of the support point in the projected
         # X-space.
@@ -61,16 +84,16 @@ function plot_qtraj(sex, npc, vname, spt, sptl, kt, xmat, qhc, nnb, ifig)
     return rsltp, ifig + 1
 end
 
-function plot_qtraj_diff(sex, npc, vname, spt, sptl, kt, xmat, qhc, nnb, ifig)
+function plot_qtraj_diff(sex, npc, vname, sp, spl, spt, sptl, kt, xmat, qhc, nnb, ifig)
 
     rsltp = []
     PyPlot.clf()
     PyPlot.axes([0.12, 0.12, 0.75, 0.8])
     PyPlot.title(@sprintf("%s %s contrasts", sex, vname))
-    for j = 1:div(length(spt), 2)
+    for j = 1:size(sp, 2)
 
-        z1 = spt[2*(j-1)+1]
-        z2 = spt[2*(j-1)+2]
+        z1 = spt[:, 2*(j-1)+1]
+        z2 = spt[:, 2*(j-1)+2]
 
         # Nearest neighbors of the support point in the projected
         # X-space.
@@ -81,7 +104,7 @@ function plot_qtraj_diff(sex, npc, vname, spt, sptl, kt, xmat, qhc, nnb, ifig)
         qp2 = mean(qhc[ii2, :], dims = 1)
         qp = vec(qp1) - vec(qp2)
 
-        PyPlot.plot(pp, qp, "-", label = sptl[2*(j-1)+1])
+        PyPlot.plot(pp, qp, "-", label = spl[j])
     end
     ha, lb = PyPlot.gca().get_legend_handles_labels()
     leg = PyPlot.figlegend(ha, lb, "center right")
@@ -94,10 +117,10 @@ function plot_qtraj_diff(sex, npc, vname, spt, sptl, kt, xmat, qhc, nnb, ifig)
     return ifig + 1
 end
 
-function plotxx_all(sex, vnames, vx, xp, spt, sptl, beta, ifig)
+function plotxx_all(sex, vnames, vx, xp, sp, spl, spt, sptl, beta, ifig)
     for j2 = 1:size(beta, 2)
         for j1 = 1:j2-1
-            ifig = plotxx(sex, vnames, vx, xp, spt, sptl, beta, j1, j2, ifig)
+            ifig = plotxx(sex, vnames, vx, xp, sp, spl, spt, sptl, beta, j1, j2, ifig)
         end
     end
     return ifig
@@ -106,25 +129,26 @@ end
 function make_support(xp, beta, vx, npt = 6)
 
     # Get the support points
-    sp = supportpoints([copy(r) for r in eachrow(xp)], npt)
+    sp = supportpoints(copy(xp'), npt)
 
     # Sort the support points so the first dimension is increasing
-    ii = sortperm([v[1] for v in sp])
-    sp = [sp[i] for i in ii]
+    ii = sortperm(sp[1, :])
+    sp = sp[:, ii]
 
     # Move each support point 1 unit in the positive or negative
     # direction for a single covariate.
-    spt, sptl = [], []
-    for (j, s) in enumerate(sp)
+    spt, sptl, spl = zeros(size(sp, 1), 2 * npt), String[], String[]
+    for (j, s) in enumerate(eachcol(sp))
         # Only 10 distinct labels
         a = string("ABCDEFGHIJ"[1+((j-1)%10)])
-        push!(spt, s + beta[vx, :])
-        push!(sptl, a)
-        push!(spt, s - beta[vx, :])
-        push!(sptl, "$(a)'")
+        spt[:, 2*j-1] = s + beta[vx, :]
+		push!(spl, a)
+        push!(sptl, "$(a)+")
+        spt[:, 2*j] = s - beta[vx, :]
+        push!(sptl, "$(a)−")
     end
 
-    return sp, spt, sptl
+    return sp, spl, spt, sptl
 end
 
 function loclin2d(
@@ -163,17 +187,17 @@ function loclin2d(
 end
 
 function diff_support(
-    sp::AbstractVector,
-    spt::AbstractVector,
+    sp::AbstractMatrix,
+    spt::AbstractMatrix,
     kt::KDTree,
     qhc::AbstractMatrix;
     nnb = 100,
 )
     qpl = []
-    for j in eachindex(sp)
+    for j = 1:size(sp, 2)
         # Paired points
-        z1 = spt[2*(j-1)+1]
-        z2 = spt[2*(j-1)+2]
+        z1 = spt[:, 2*(j-1)+1]
+        z2 = spt[:, 2*(j-1)+2]
 
         # Nearest neighbors of the support point in the projected
         # X-space.
@@ -207,8 +231,8 @@ function diff_support(
 end
 
 function plot_qtraj_diffmap(
-    sp::AbstractVector,
-    spt::AbstractVector,
+    sp::AbstractMatrix,
+    spt::AbstractMatrix,
     kt::KDTree,
     qhc::AbstractMatrix,
     pp::AbstractVector,
@@ -217,8 +241,7 @@ function plot_qtraj_diffmap(
     ifig::Int;
     nnb = 100,
 )
-    yy, ym, pcl = diff_support(sp::AbstractVector, spt, kt, qhc; nnb = nnb)
-    spm = hcat(sp...)'
+    yy, ym, pcl = diff_support(sp, spt, kt, qhc; nnb = nnb)
 
     # Plot the mean
     PyPlot.clf()
@@ -250,11 +273,11 @@ function plot_qtraj_diffmap(
     PyPlot.savefig(@sprintf("plots/%03d.pdf", ifig))
     ifig += 1
 
-    for j1 = 1:size(spm, 2)
-        for j2 = j1+1:size(spm, 2)
+    for j1 = 1:size(sp, 1)
+        for j2 = j1+1:size(sp, 1)
 
             # Select the dominant components
-            xx = spm[:, [j1, j2]]
+            xx = sp[[j1, j2], :]'
             xlim = [minimum(xx[:, 1]), maximum(xx[:, 1])]
             ylim = [minimum(xx[:, 2]), maximum(xx[:, 2])]
 
