@@ -12,7 +12,7 @@ end
 # Control parameters
 maxiter = 10 #500
 maxiter_gd = 10 #50
-skip_se = false
+skip_se = true
 
 # Variables to analyze
 m1var = :Ht_Ave_Use
@@ -99,14 +99,21 @@ end
 function gen_penalty(mode, age1::Float64, age2::Float64, np::Int, nb::Int)
     age = collect(range(age1, age2, length = np))
     xb = get_basis(nb, age)
+
+	# f2 * v gives the second differences of v
     f2 = zeros(np - 2, np)
     for i = 1:np-2
         f2[i, i:i+2] = [1, -2, 1]
     end
+
+    # md2 defines a quadratic form for the coefficients beta, so that
+    # beta' * md2 * beta is a smoothing penalty on the fitted values
     md = f2 * xb
     md2 = md' * md
 	_, s, _ = svd(md2)
 	md2 /= maximum(s)
+
+	md2 .+= I(size(md2, 1))
     
     qq = zeros(nb * mode, nb * mode)
     for i = 1:mode
@@ -152,7 +159,7 @@ function fitmodel(mode, sex, ifg; nb = 5)
     xm = Xmat(meanmat, scalemat, smoothmat, unexplainedmat)
 
     # Penalize the mean structure for smoothness.
-    f = 1e5
+    f = 1000.
     pen = Penalty(
         f * gen_penalty(mode, 1.0, 25.0, 100, nb),
         zeros(0, 0),
