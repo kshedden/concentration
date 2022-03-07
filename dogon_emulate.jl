@@ -24,7 +24,7 @@ trans = Dict(:Ht_Ave_Use => "Height", :BMI => "BMI", :SBP_MEAN => "SBP")
 # Spline-like basis for mean functions
 function get_basis(nb, age; scale = 4)
     xb = ones(length(age), nb)
-    xb[:, 2] = (age - mean(age)) / maximum(age)
+    xb[:, 2] = (age .- mean(age)) / maximum(age)
     age1 = minimum(skipmissing(age))
     age2 = maximum(skipmissing(age))
     for (j, v) in enumerate(range(age1, age2, length = nb - 2))
