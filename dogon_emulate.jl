@@ -1,10 +1,11 @@
-using DataFrames, CSV, GZip, ProcessRegression, UnicodePlots, Statistics, Optim
-using PyPlot, Printf, LinearAlgebra, UnicodePlots
+using DataFrames, CSV, ProcessRegression, UnicodePlots, Statistics, Optim
+using PyPlot, Printf, LinearAlgebra, UnicodePlots, CodecZlib
 
 rm("plots", recursive = true, force = true)
 mkdir("plots")
 
-df = GZip.open("/home/kshedden/data/Beverly_Strassmann/Cohort_2021.csv.gz") do io
+fn = "/home/kshedden/data/Beverly_Strassmann/Cohort_2021.csv.gz"
+df = open(GzipDecompressorStream, fn) do io
     CSV.read(io, DataFrame)
 end
 
