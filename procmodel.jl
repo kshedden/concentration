@@ -24,12 +24,13 @@ trans = Dict(:Ht_Ave_Use => "Height", :BMI => "BMI", :SBP_MEAN => "SBP")
 # Spline-like basis for mean functions
 function get_basis(nb, age; scale = 4)
     xb = ones(length(age), nb)
+    xb[:, 2] = (age - mean(age)) / maximum(age)
     age1 = minimum(skipmissing(age))
     age2 = maximum(skipmissing(age))
-    for (j, v) in enumerate(range(age1, age2, length = nb - 1))
+    for (j, v) in enumerate(range(age1, age2, length = nb - 2))
         u = (age .- v) ./ scale
         v = exp.(-u .^ 2 ./ 2)
-        xb[:, j+1] = v .- mean(v)
+        xb[:, j+2] = v .- mean(v)
     end
     return xb
 end
@@ -103,6 +104,9 @@ function gen_penalty(mode, age1::Float64, age2::Float64, np::Int, nb::Int)
     end
     md = f2 * xb
     md2 = md' * md
+	_, s, _ = svd(md2)
+	md2 /= maximum(s)
+    
     qq = zeros(nb * mode, nb * mode)
     for i = 1:mode
         ii = (i - 1) * nb
