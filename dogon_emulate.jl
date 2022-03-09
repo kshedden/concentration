@@ -7,6 +7,8 @@ mkdir("plots")
 rm("emulated", recursive = true, force = true)
 mkdir("emulated")
 
+# Plot data up to this age, also determines the range of values
+# where the smoothing penalty applies.
 maxage = 27.0
 
 fn = "/home/kshedden/data/Beverly_Strassmann/Cohort_2021.csv.gz"
@@ -14,7 +16,7 @@ df = open(GzipDecompressorStream, fn) do io
     CSV.read(io, DataFrame)
 end
 
-# Control parameters
+# Algorithm control parameters
 maxiter = [50, 100]
 algorithms = [
     GradientDescent(linesearch = Optim.BackTracking()),
@@ -68,18 +70,19 @@ function get_dataframe(mode, sex)
     return dx
 end
 
+# Returns the response variable for one step of the chained emulation.
 function get_response(mode, dx)
     y = if mode == 1
         dx[:, m1var]
     elseif mode == 2
         dx[:, m2var]
     else
-        println(var(dx[:, yvar]))
         dx[:, yvar]
     end
     return Vector{Float64}(y)
 end
 
+# Generate the design matrix for estimating the mean structure.
 function get_meanmat(mode, age, nb; m1dat = nothing, m2dat = nothing)
     xb = get_basis(nb, age)
     x = if mode == 1
@@ -95,11 +98,15 @@ function get_meanmat(mode, age, nb; m1dat = nothing, m2dat = nothing)
 end
 
 function get_scalemat(mode, dx)
-    return ones(size(dx, 1), 1)
+    x = ones(size(dx, 1), 2)
+    x[:, 2] = log.(10 .+ dx[:, :Age_Yrs])
+    return x
 end
 
 function get_smoothmat(mode, dx)
-    return ones(size(dx, 1), 1)
+    x = ones(size(dx, 1), 2)
+    x[:, 2] = log.(10 .+ dx[:, :Age_Yrs])
+    return x
 end
 
 function get_unexplainedmat(mode, dx)
@@ -178,6 +185,8 @@ function fitmodel(mode, sex, ifg; nb = 5)
     idv = Vector{Int}(dx[:, :ID])
     xm = Xmat(meanmat, scalemat, smoothmat, unexplainedmat)
 
+    # Penalty parametes, manyually adjusted for each step in the emulation
+    # chain.
     fx = Dict()
     fx["Female"] = Dict(1 => [0.5, 0.999], 2 => [0.5, 0.999], 3 => [2.0, 0.98])
     fx["Male"] = Dict(1 => [0.5, 0.99], 2 => [0.5, 0.99], 3 => [2.0, 0.98])
@@ -191,6 +200,8 @@ function fitmodel(mode, sex, ifg; nb = 5)
         zeros(0, 0),
         zeros(0, 0),
     )
+
+    # Fit the model
     pm = ProcessMLEModel(response, xm, age, idv; penalty = pen)
     fit!(pm; verbose = false, maxiter = maxiter, algorithms = algorithms, skip_se = skip_se)
 
@@ -198,13 +209,20 @@ function fitmodel(mode, sex, ifg; nb = 5)
 end
 
 function genmeanfig(sex, mode, nb, pma, ifg)
+
+    # Age range for models where the outcome variable
+    # is one of the mediators
     age1 = collect(range(1, maxage, length = 50))
+
+    # Age range for models where the outcome variable
+    # is SBP.
     age2 = collect(range(10, maxage, length = 50))
 
-    # Expected value of m1var
+    # Expected value of the first mediator (m1var)
     meanmat1 = get_meanmat(1, age1, nb)
     e1 = meanmat1 * pma[1].params.mean
 
+    # Plot the estimated mean of the first mediator.
     if mode == 1
         PyPlot.clf()
         PyPlot.grid(true)
@@ -218,7 +236,8 @@ function genmeanfig(sex, mode, nb, pma, ifg)
         return ifg + 1
     end
 
-    # Expected value of m2var
+    # Expected value of the second mediator (m2var) at three
+    # levels of manipulation of the first mediator.
     e2 = []
     fv = [0.8, 1.0, 1.2]
     for f in fv
@@ -226,6 +245,7 @@ function genmeanfig(sex, mode, nb, pma, ifg)
         push!(e2, meanmat2 * pma[2].params.mean)
     end
 
+    # Plot the estimated mean of the second mediator.
     if mode == 2
         PyPlot.clf()
         PyPlot.figure(figsize = (8, 5))
@@ -244,7 +264,8 @@ function genmeanfig(sex, mode, nb, pma, ifg)
         return ifg + 1
     end
 
-    # Expected value of yvar
+    # Calculate the expected value of the outcome (SBP), at
+    # different manipulated levels of the two mediators.
     e3, ft = [], []
     for (j1, f1) in enumerate(fv)
         for (j2, f2) in enumerate(fv)
@@ -258,6 +279,7 @@ function genmeanfig(sex, mode, nb, pma, ifg)
         end
     end
 
+    # Plot the expected value of the outcome variable (SBP).
     PyPlot.clf()
     PyPlot.figure(figsize = (8, 5))
     PyPlot.axes([0.1, 0.1, 0.7, 0.8])
@@ -269,14 +291,16 @@ function genmeanfig(sex, mode, nb, pma, ifg)
     leg = PyPlot.figlegend(ha, lb, "center right")
     leg.draw_frame(false)
     leg.set_title(@sprintf("%s/%s", trans[m1var], trans[m2var]))
-    PyPlot.xlabel("Age")
-    PyPlot.ylabel(@sprintf("%s %s", sex, trans[yvar]))
+    PyPlot.xlabel("Age", size = 15)
+    PyPlot.ylabel(@sprintf("%s %s", sex, trans[yvar]), size = 15)
     PyPlot.savefig(@sprintf("plots/%03d.pdf", ifg))
     return ifg + 1
 end
 
+# Plot heatmaps of the conditional covariance and correlation functions.
 function gencovfig(sex, mode, par, ifg)
-    aa = mode == 3 ? range(10, maxage, length = 50) : range(1, maxage, length = 50)
+    aa = mode == 3 ? range(11, maxage, length = 50) : range(1, maxage, length = 50)
+    minage = mode == 3 ? 11 : 0
     aa = collect(aa)
     dx = DataFrame(:Age_Yrs => aa)
     lsc = get_scalemat(mode, dx) * par.scale
@@ -303,7 +327,7 @@ function gencovfig(sex, mode, par, ifg)
             cm,
             interpolation = "nearest",
             origin = "upper",
-            extent = [1, maxage, maxage, 1],
+            extent = [minage, maxage, maxage, minage],
         )
         PyPlot.colorbar()
         PyPlot.xlabel("Age", size = 15)
@@ -321,8 +345,10 @@ end
 function plot_emulated(mode, em, par, px, ifg)
 
     y_mean = px.X.mean * par.mean
+
+    # Plotting limits
     xlim = Dict(1 => (0, maxage), 2 => (0, maxage), 3 => (11, maxage))
-    ylim = Dict(1 => (60, 200), 2 => (0, 80), 3 => (60, 150))
+    ylim = Dict(1 => (60, 200), 2 => (0, 90), 3 => (60, 150))
 
     # Plot a limited number of subjects
     ii = 1
@@ -396,6 +422,7 @@ function emulate_chain(pma, nb, sex)
     return dm
 end
 
+# Save all model tables into a file.
 function summary_table(pma, fname)
     out = open(fname, "w")
     for px in pma
