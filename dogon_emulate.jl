@@ -4,41 +4,55 @@ using PyPlot, Printf, LinearAlgebra, UnicodePlots, CodecZlib
 rm("plots", recursive = true, force = true)
 mkdir("plots")
 
+rm("emulated", recursive = true, force = true)
+mkdir("emulated")
+
+maxage = 27.0
+
 fn = "/home/kshedden/data/Beverly_Strassmann/Cohort_2021.csv.gz"
 df = open(GzipDecompressorStream, fn) do io
     CSV.read(io, DataFrame)
 end
 
 # Control parameters
-maxiter = 10 #500
-maxiter_gd = 10 #50
+maxiter = [50, 100]
+algorithms = [
+    GradientDescent(linesearch = Optim.BackTracking()),
+    LBFGS(linesearch = Optim.BackTracking()),
+]
 skip_se = true
 
-# Variables to analyze
+# Mediators
 m1var = :Ht_Ave_Use
-m2var = :BMI
+m2var = :WT
+
+# Outcome
 yvar = :SBP_MEAN
 
 # Prettify names for plotting
-trans = Dict(:Ht_Ave_Use => "Height", :BMI => "BMI", :SBP_MEAN => "SBP")
+trans = Dict(:Ht_Ave_Use => "Height", :BMI => "BMI", :SBP_MEAN => "SBP", :WT => "Weight")
 
-# Spline-like basis for mean functions
+# Spline-like basis for mean functions.  This is a non-adaptive basis --
+# the basis columns at age = a do not depend on the other ages being
+# represented.
 function get_basis(nb, age; scale = 4)
+
+    # Constant and linear terms
     xb = ones(length(age), nb)
-    xb[:, 2] = (age .- mean(age)) / maximum(age)
-    age1 = minimum(skipmissing(age))
-    age2 = maximum(skipmissing(age))
-    for (j, v) in enumerate(range(age1, age2, length = nb - 2))
+    xb[:, 2] = (age .- 15) / 30
+
+    # Radial basis terms
+    for (j, v) in enumerate(range(0, maxage, length = nb - 2))
         u = (age .- v) ./ scale
-        v = exp.(-u .^ 2 ./ 2)
-        xb[:, j+2] = v .- mean(v)
+        xb[:, j+2] = exp.(-u .^ 2 ./ 2)
     end
+
     return xb
 end
 
-# mode=1 samples m1
-# mode=2 samples m2 | m1
-# mode=3 samples y | m1, m2
+# mode=1 sample m1
+# mode=2 sample m2 | m1
+# mode=3 sample y | m1, m2
 function get_dataframe(mode, sex)
     @assert sex in ["Female", "Male"]
     vn = [:ID, :datecomb, :Age_Yrs, :Sex, m1var]
@@ -60,6 +74,7 @@ function get_response(mode, dx)
     elseif mode == 2
         dx[:, m2var]
     else
+        println(var(dx[:, yvar]))
         dx[:, yvar]
     end
     return Vector{Float64}(y)
@@ -70,9 +85,9 @@ function get_meanmat(mode, age, nb; m1dat = nothing, m2dat = nothing)
     x = if mode == 1
         xb
     elseif mode == 2
-        hcat(xb, xb .* m1dat)
+        hcat(xb, xb[:, 1:2] .* m1dat)
     elseif mode == 3
-        hcat(xb, xb .* m1dat, xb .* m2dat)
+        hcat(xb, xb[:, 1:2] .* m1dat, xb[:, 1:2] .* m2dat)
     else
         error("!!")
     end
@@ -80,13 +95,11 @@ function get_meanmat(mode, age, nb; m1dat = nothing, m2dat = nothing)
 end
 
 function get_scalemat(mode, dx)
-    x = ones(size(dx, 1), 2)
-    x[:, 2] = dx[:, :Age_Yrs]
-    return x
+    return ones(size(dx, 1), 1)
 end
 
 function get_smoothmat(mode, dx)
-    return get_scalemat(mode, dx)
+    return ones(size(dx, 1), 1)
 end
 
 function get_unexplainedmat(mode, dx)
@@ -96,11 +109,18 @@ end
 # The penalty matrix is block-diagonal, with the diagonal blocks being the
 # second difference.  For mode = 2, 3, the squared second derivative is
 # calculated for the age interactions and for the age main effects.
-function gen_penalty(mode, age1::Float64, age2::Float64, np::Int, nb::Int)
+function gen_penalty(
+    mode,
+    age1::Float64,
+    age2::Float64,
+    np::Int,
+    nb::Int;
+    fpen::Float64 = 0.9,
+)
     age = collect(range(age1, age2, length = np))
     xb = get_basis(nb, age)
 
-	# f2 * v gives the second differences of v
+    # f2 * v gives the second differences of v
     f2 = zeros(np - 2, np)
     for i = 1:np-2
         f2[i, i:i+2] = [1, -2, 1]
@@ -110,16 +130,13 @@ function gen_penalty(mode, age1::Float64, age2::Float64, np::Int, nb::Int)
     # beta' * md2 * beta is a smoothing penalty on the fitted values
     md = f2 * xb
     md2 = md' * md
-	_, s, _ = svd(md2)
-	md2 /= maximum(s)
+    _, s, _ = svd(md2)
+    md2 /= maximum(s)
+    md2 = fpen * md2 + (1 - fpen) * I(size(md2, 1))
 
-	md2 .+= I(size(md2, 1))
-    
-    qq = zeros(nb * mode, nb * mode)
-    for i = 1:mode
-        ii = (i - 1) * nb
-        qq[ii+1:ii+nb, ii+1:ii+nb] = md2
-    end
+    m = nb + 2 * (mode - 1)
+    qq = zeros(m, m)
+    qq[1:nb, 1:nb] = md2
 
     return qq
 end
@@ -132,6 +149,9 @@ function plot_basis(xb, age, ifg)
     for j = 1:size(xb, 2)
         PyPlot.plot(age[ii], xb[ii, j], "-")
     end
+    PyPlot.title("Basis functions")
+    PyPlot.ylabel("Basis value", size = 15)
+    PyPlot.xlabel("Age", size = 15)
     PyPlot.savefig(@sprintf("plots/%03d.pdf", ifg))
     return ifg + 1
 end
@@ -158,30 +178,28 @@ function fitmodel(mode, sex, ifg; nb = 5)
     idv = Vector{Int}(dx[:, :ID])
     xm = Xmat(meanmat, scalemat, smoothmat, unexplainedmat)
 
+    fx = Dict()
+    fx["Female"] = Dict(1 => [0.5, 0.999], 2 => [0.5, 0.999], 3 => [2.0, 0.98])
+    fx["Male"] = Dict(1 => [0.5, 0.99], 2 => [0.5, 0.99], 3 => [2.0, 0.98])
+
     # Penalize the mean structure for smoothness.
-    f = 1000.
+    f = fx[sex][mode][1] * length(response)
+    fpen = fx[sex][mode][2]
     pen = Penalty(
-        f * gen_penalty(mode, 1.0, 25.0, 100, nb),
+        f * gen_penalty(mode, 1.0, maxage, 100, nb; fpen = fpen),
         zeros(0, 0),
         zeros(0, 0),
         zeros(0, 0),
     )
     pm = ProcessMLEModel(response, xm, age, idv; penalty = pen)
-    fit!(
-        pm;
-        verbose = false,
-        maxiter = maxiter,
-        maxiter_gd = maxiter_gd,
-        g_tol = 1e-4,
-        skip_se = skip_se,
-    )
+    fit!(pm; verbose = false, maxiter = maxiter, algorithms = algorithms, skip_se = skip_se)
 
     return pm, ifg
 end
 
 function genmeanfig(sex, mode, nb, pma, ifg)
-    age1 = collect(range(1, 25, length = 50))
-    age2 = collect(range(10, 25, length = 50))
+    age1 = collect(range(1, maxage, length = 50))
+    age2 = collect(range(10, maxage, length = 50))
 
     # Expected value of m1var
     meanmat1 = get_meanmat(1, age1, nb)
@@ -191,8 +209,11 @@ function genmeanfig(sex, mode, nb, pma, ifg)
         PyPlot.clf()
         PyPlot.grid(true)
         PyPlot.plot(age1, e1, "-")
-        PyPlot.xlabel("Age")
-        PyPlot.ylabel(@sprintf("%s %s", sex, trans[m1var]))
+        PyPlot.xlabel("Age", size = 15)
+        PyPlot.ylabel(
+            @sprintf("Mean %s %s", lowercase(sex), lowercase(trans[m1var])),
+            size = 15,
+        )
         PyPlot.savefig(@sprintf("plots/%03d.pdf", ifg))
         return ifg + 1
     end
@@ -217,8 +238,8 @@ function genmeanfig(sex, mode, nb, pma, ifg)
         leg = PyPlot.figlegend(ha, lb, "center right")
         leg.draw_frame(false)
         leg.set_title(trans[m1var])
-        PyPlot.xlabel("Age")
-        PyPlot.ylabel(@sprintf("%s %s", sex, trans[m2var]))
+        PyPlot.xlabel("Age", size = 15)
+        PyPlot.ylabel(@sprintf("%s %s", sex, trans[m2var]), size = 15)
         PyPlot.savefig(@sprintf("plots/%03d.pdf", ifg))
         return ifg + 1
     end
@@ -255,13 +276,12 @@ function genmeanfig(sex, mode, nb, pma, ifg)
 end
 
 function gencovfig(sex, mode, par, ifg)
-    aa = mode == 3 ? range(10, 25, length = 50) : range(1, 25, length = 50)
+    aa = mode == 3 ? range(10, maxage, length = 50) : range(1, maxage, length = 50)
     aa = collect(aa)
-    x = ones(length(aa), 2)
-    x[:, 2] = aa
-    lsc = x * par.scale
-    lsm = x * par.smooth
-    lux = x[:, 1:1] * par.unexplained
+    dx = DataFrame(:Age_Yrs => aa)
+    lsc = get_scalemat(mode, dx) * par.scale
+    lsm = get_smoothmat(mode, dx) * par.smooth
+    lux = get_unexplainedmat(mode, dx) * par.unexplained
     cpar = GaussianCovPar(lsc, lsm, lux)
     cm = covmat(cpar, aa)
 
@@ -283,7 +303,7 @@ function gencovfig(sex, mode, par, ifg)
             cm,
             interpolation = "nearest",
             origin = "upper",
-            extent = [1, 25, 25, 1],
+            extent = [1, maxage, maxage, 1],
         )
         PyPlot.colorbar()
         PyPlot.xlabel("Age", size = 15)
@@ -301,6 +321,8 @@ end
 function plot_emulated(mode, em, par, px, ifg)
 
     y_mean = px.X.mean * par.mean
+    xlim = Dict(1 => (0, maxage), 2 => (0, maxage), 3 => (11, maxage))
+    ylim = Dict(1 => (60, 200), 2 => (0, 80), 3 => (60, 150))
 
     # Plot a limited number of subjects
     ii = 1
@@ -312,68 +334,24 @@ function plot_emulated(mode, em, par, px, ifg)
         i1, i2 = px.grp[:, ii]
         ti = px.time[i1:i2]
         PyPlot.clf()
-        PyPlot.axes([0.1, 0.1, 0.7, 0.8])
+        PyPlot.axes([0.1, 0.1, 0.65, 0.8])
         PyPlot.grid(true)
         PyPlot.title(@sprintf("Subject %d", ii))
         PyPlot.xlabel("Age", size = 15)
         PyPlot.ylabel(trans[[m1var, m2var, yvar][mode]], size = 15)
-        PyPlot.plot(ti, y_mean[i1:i2], "-", color = "black", label = "Mean")
-        PyPlot.plot(ti, px.y[i1:i2], "-", color = "orange", label = "Observed")
+        PyPlot.plot(ti, y_mean[i1:i2], "-", color = "black", label = "Population mean")
         for e in em
             PyPlot.plot(ti, e[i1:i2], "-", color = "grey", alpha = 0.5, label = "Simulated")
         end
+        PyPlot.xlim(xlim[mode])
+        PyPlot.ylim(ylim[mode])
         ha, lb = plt.gca().get_legend_handles_labels()
-        leg = PyPlot.figlegend(ha[1:3], lb[1:3], "center right")
+        leg = PyPlot.figlegend(ha[1:2], lb[1:2], "center right")
         leg.draw_frame(false)
         PyPlot.savefig(@sprintf("plots/%03d.pdf", ifg))
         ii += 1
         ifg += 1
     end
-
-    return ifg
-end
-
-function plot_chained_helper(em, id, vn, ifg)
-    PyPlot.clf()
-    PyPlot.grid(true)
-    PyPlot.xlabel("Age", size = 15)
-    PyPlot.ylabel(trans[vn], size = 15)
-    PyPlot.title("Jointly emulated data")
-    vx = Symbol(string(vn) * "_em")
-    for idx in id
-        for ee in em
-            ii = findall(ee[:, :ID] .== idx)
-            ex = ee[ii, [:Age_Yrs, vx]]
-            ex = ex[completecases(ex), :]
-            if size(ex, 1) > 0
-                PyPlot.plot(ex[:, :Age_Yrs], ex[:, vx], "-")
-            end
-        end
-    end
-    PyPlot.savefig(@sprintf("plots/%03d.pdf", ifg))
-    return ifg + 1
-end
-
-function plot_chained(pma, em, sex, ifg)
-
-    id = unique(em[1][:, :ID])
-
-    # Find id's to plot.  Don't plot people with very few data points
-    idu = []
-    j = 1
-    while length(idu) < 10
-        ii = findall(em[1][:, :ID] .== id[j])
-        if length(ii) < 5
-            j += 1
-            continue
-        else
-            push!(idu, id[j])
-        end
-    end
-
-    ifg = plot_chained_helper(em, idu, m1var, ifg)
-    ifg = plot_chained_helper(em, idu, m2var, ifg)
-    ifg = plot_chained_helper(em, idu, yvar, ifg)
 
     return ifg
 end
@@ -429,7 +407,7 @@ end
 
 function main(ifg, sex)
     pma = []
-    nb = 5
+    nb = 7
     nrep = 10
     for mode in [1, 2, 3]
         px, ifg = fitmodel(mode, sex, ifg; nb = nb)
@@ -449,8 +427,15 @@ function main(ifg, sex)
     # from P(M1), P(M2|M1) and P(Y|M1, M2).  The sampled
     # values from each distribution are passed to the next
     # distribution as conditioning variables.
-    em = [emulate_chain(pma, nb, sex) for _ = 1:10]
-    ifg = plot_chained(pma, em, sex, ifg)
+    em = [emulate_chain(pma, nb, sex) for _ = 1:100]
+
+    for (j, dd) in enumerate(em)
+        dd[:, :Sex] .= sex
+        fn = @sprintf("emulated/%s_%03d.csv.gz", lowercase(sex), j)
+        open(GzipCompressorStream, fn, "w") do io
+            CSV.write(io, dd)
+        end
+    end
 
     summary_table(pma, "procmodels_$(sex).txt")
 
@@ -459,8 +444,8 @@ end
 
 ifg = 0
 ifg, pma_f = main(ifg, "Female")
-#ifg, pma_m = main(ifg, "Male")
+ifg, pma_m = main(ifg, "Male")
 
 f = [@sprintf("plots/%03d.pdf", j) for j = 0:ifg-1]
-c = `gs -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -sOutputFile=dogon_procmodel.pdf $f`
+c = `gs -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -sOutputFile=dogon_emulate.pdf $f`
 run(c)

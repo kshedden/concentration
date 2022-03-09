@@ -8,30 +8,78 @@ function plotxx(sex, vnames, vx, xp, sp, spl, spt, sptl, beta, j1, j2, ifig)
     PyPlot.grid(true)
     PyPlot.plot(xp[:, j1], xp[:, j2], "o", alpha = 0.2, rasterized = true)
 
-	# Draw a grey line connecting each pair of contrasting points
-	cpa = PyPlot.matplotlib.patches.ConnectionPatch
-	ax = PyPlot.gca()
-	for k in 1:size(sp, 2)
-		j = 2*(k-1) + 1
-		xs = [spt[j1, j], spt[j1, j+1]]
-		ys = [spt[j2, j], spt[j2, j+1]]
-		rr = sqrt(40)
-		PyPlot.plot(xs[1:1], ys[1:1], "+", color="grey", mfc="none", ms=rr, zorder=10)
-		PyPlot.plot(xs[1:1], ys[1:1], "o", color="grey", mfc="none", ms=rr, zorder=10)
-		PyPlot.plot(xs[2:2], ys[2:2], "_", color="grey", mfc="none", ms=rr, zorder=10)
-		PyPlot.plot(xs[2:2], ys[2:2], "o", color="grey", mfc="none", ms=rr, zorder=10)
+    # Draw a grey line connecting each pair of contrasting points
+    cpa = PyPlot.matplotlib.patches.ConnectionPatch
+    ax = PyPlot.gca()
+    for k = 1:size(sp, 2)
+        j = 2 * (k - 1) + 1
+        xs = [spt[j1, j], spt[j1, j+1]]
+        ys = [spt[j2, j], spt[j2, j+1]]
+        rr = sqrt(40)
+        PyPlot.plot(
+            xs[1:1],
+            ys[1:1],
+            "+",
+            color = "grey",
+            mfc = "none",
+            ms = rr,
+            zorder = 10,
+        )
+        PyPlot.plot(
+            xs[1:1],
+            ys[1:1],
+            "o",
+            color = "grey",
+            mfc = "none",
+            ms = rr,
+            zorder = 10,
+        )
+        PyPlot.plot(
+            xs[2:2],
+            ys[2:2],
+            "_",
+            color = "grey",
+            mfc = "none",
+            ms = rr,
+            zorder = 10,
+        )
+        PyPlot.plot(
+            xs[2:2],
+            ys[2:2],
+            "o",
+            color = "grey",
+            mfc = "none",
+            ms = rr,
+            zorder = 10,
+        )
 
-		# https://stackoverflow.com/questions/58490203/matplotlib-plot-a-line-with-open-markers-where-the-line-is-not-visible-within
-    	cp = cpa((xs[1], ys[1]), (xs[2], ys[2]), 
-                 coordsA="data", coordsB="data", axesA=ax, axesB=ax,
-                 shrinkA=rr/2, shrinkB=rr/2,
-                 color="grey", zorder=10)
+        # https://stackoverflow.com/questions/58490203/matplotlib-plot-a-line-with-open-markers-where-the-line-is-not-visible-within
+        cp = cpa(
+            (xs[1], ys[1]),
+            (xs[2], ys[2]),
+            coordsA = "data",
+            coordsB = "data",
+            axesA = ax,
+            axesB = ax,
+            shrinkA = rr / 2,
+            shrinkB = rr / 2,
+            color = "grey",
+            zorder = 10,
+        )
         ax.add_patch(cp)
-	end
+    end
 
-	# Draw a label for each contrasting pair
+    # Draw a label for each contrasting pair
     for (k, z) in enumerate(eachcol(sp))
-        PyPlot.text(z[j1], z[j2], spl[k], size = 14, ha = "center", va = "center", zorder=11)
+        PyPlot.text(
+            z[j1],
+            z[j2],
+            spl[k],
+            size = 14,
+            ha = "center",
+            va = "center",
+            zorder = 11,
+        )
     end
 
     # Make it a biplot
@@ -142,7 +190,7 @@ function make_support(xp, beta, vx, npt = 6)
         # Only 10 distinct labels
         a = string("ABCDEFGHIJ"[1+((j-1)%10)])
         spt[:, 2*j-1] = s + beta[vx, :]
-		push!(spl, a)
+        push!(spl, a)
         push!(sptl, "$(a)+")
         spt[:, 2*j] = s - beta[vx, :]
         push!(sptl, "$(a)−")
