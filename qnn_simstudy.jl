@@ -90,7 +90,7 @@ function simstudy(
     return xx
 end
 
-function run_simstudy()
+function run_simstudy(out)
 
     # Sample size
     n = 1500
@@ -108,7 +108,7 @@ function run_simstudy()
                 # Get the estimated quantiles
                 xa = []
                 for p in [0.5, 0.75, 0.9]
-                    xx = simstudy(x, sigma, p, square; nrep = 5, la = 0.1)
+                    xx = simstudy(x, sigma, p, square; nrep = 100)
                     push!(xa, xx)
                 end
 
@@ -128,23 +128,39 @@ function run_simstudy()
                 # If we change this formula we must change the fitted
                 # relative bias values below.
                 md = lm(@formula(bias ~ tdiff + tdiff^2 + tdiff^3), xa)
-                println("d=$(d) sigma=$(sigma) square=$(square)")
 
                 # Mainly we are interested in whether c[1] is small,
                 # since this indicates no bias when estimating the
                 # conditional median
                 c = coef(md)
-                println("Coefficients:", c)
 
-                # Report results only for the tq'th probability point
-                xx = xa[xa[:, :pc].==tq-0.5, :tdiff]
+                write(out, "d=$(d) sigma=$(sigma) square=$(square)\n")
+                write(out, "Coefficients: $c\n")
+                write(out, @sprintf("R-squared: %f\n", r2(md)))
 
-                # These are the fitted relative bias values
-                yy = c[2] .+ c[3] * xx + c[4] * xx .^ 2
-                println("Median relative bias: ", median(abs.(yy)))
+                # Report results for the tq'th probability point
+                for tq in [0.5, 0.75, 0.9]
+                    xx = xa[xa[:, :pc].==tq-0.5, :tdiff]
+                    xt = xa[xa[:, :pc].==tq-0.5, :tquant]
+
+                    # These are the fitted relative bias values
+                    yy = c[2] .+ c[3] * xx + c[4] * xx .^ 2
+
+                    write(out, @sprintf("SD of true %.2f quantiles: %f\n", tq, std(xt)))
+                    write(
+                        out,
+                        @sprintf(
+                            "Median relative bias at p=%.2f: %f\n",
+                            tq,
+                            median(abs.(yy))
+                        )
+                    )
+                end
             end
         end
     end
 end
 
-run_simstudy()
+open("writing/qnn_simstudy.txt", "w") do out
+    run_simstudy(out)
+end

@@ -4,7 +4,8 @@ early childhood growth (PC-scores), and control variables.
 =#
 
 using CSV, DataFrames, CodecZlib, Printf, Statistics, UnicodePlots
-using StatsBase, StatsModels, Distributions, GLM, GEE
+using StatsBase, StatsModels, Distributions, GLM, GEE, LinearAlgebra
+using PyPlot
 
 df = open("/home/kshedden/data/Beverly_Strassmann/Cohort_2021.csv.gz") do io
     CSV.read(GzipDecompressorStream(io), DataFrame)
@@ -13,6 +14,18 @@ end
 # Indicator that a female is pregnant
 df[!, :Preg] = df[:, :PregMo_Use] .> 0
 df[!, :Preg] = replace(df[!, :Preg], true => 1, false => 0)
+
+rslt = DataFrame(
+    :Sex => String[],
+    :CBSVar => String[],
+    :Adj => Int[],
+    :BMI => Float64[],
+    :BMI_se => Float64[],
+    :Ht => Float64[],
+    :Ht_se => Float64[],
+    :CBS => Float64[],
+    :CBS_se => Float64[],
+)
 
 function merge_pc_scores(df)
     pcs = open("dogon_pc_scores.csv") do io
@@ -99,6 +112,165 @@ function check_regression(sex, cbs, adj, df, out)
     write(out, @sprintf("n=%d\n", nobs(mm)))
     write(out, s)
     write(out, "\n\n")
+
+    c = coef(mm)
+    s = sqrt.(diag(vcov(mm)))
+    row = [sex, string(cbs), adj, c[2], s[2], c[3], s[3], c[4], s[4]]
+    push!(rslt, row)
+end
+
+function make_dotplot()
+
+    y = 0
+    e = 0.1
+    xlim = [-4, 10]
+    ms = 4
+    mfc = "white"
+
+    PyPlot.figure(figsize = (8, 12), frameon = false)
+    PyPlot.clf()
+    ax = PyPlot.axes([0.1, 0.1, 0.8, 0.83])
+    ticker = PyPlot.matplotlib.ticker
+    ax.yaxis.set_major_locator(ticker.NullLocator())
+    ax.spines["left"].set_visible(false)
+    ax.spines["right"].set_visible(false)
+    ax.spines["top"].set_visible(false)
+
+    for jj = 1:12
+
+        if (jj - 1) % 4 == 0
+            r = PyPlot.matplotlib.patches.Rectangle(
+                [xlim[1], y - 0.5],
+                xlim[2] - xlim[1],
+                2,
+                alpha = 0.2,
+                facecolor = "lightgrey",
+                edgecolor = "lightgrey",
+            )
+            ax.add_patch(r)
+        end
+
+        PyPlot.plot(xlim, [y, y], "-", color = "grey", lw = 2)
+
+        row = rslt[2*(jj-1)+1, :]
+        PyPlot.text(xlim[1] - 0.5, y, string(row[:CBSVar]), ha = "center", va = "center")
+        if (jj - 1) % 2 == 1
+            PyPlot.text(xlim[2] + 0.5, y, "A", ha = "center", va = "center")
+        end
+
+        # Female
+        row = rslt[2*(jj-1)+1, :]
+        PyPlot.plot(
+            [row.Ht - 2 * row.Ht_se, row.Ht + 2 * row.Ht_se],
+            [y + e, y + e],
+            "-",
+            color = "grey",
+        )
+        kwds = jj == 1 ? Dict(:label => "Female adult height") : Dict()
+        PyPlot.plot(
+            [row.Ht, row.Ht],
+            [y + e, y + e],
+            "v",
+            color = "orange",
+            ms = ms,
+            mfc = mfc;
+            kwds...,
+        )
+        PyPlot.plot(
+            [row.BMI - 2 * row.BMI_se, row.BMI + 2 * row.BMI_se],
+            [y + 2 * e, y + 2 * e],
+            "-",
+            color = "grey",
+        )
+        kwds = jj == 1 ? Dict(:label => "Female adult BMI") : Dict()
+        PyPlot.plot(
+            [row.BMI, row.BMI],
+            [y + 2 * e, y + 2 * e],
+            "o",
+            color = "orange",
+            ms = ms,
+            mfc = mfc;
+            kwds...,
+        )
+        PyPlot.plot(
+            [row.CBS - 2 * row.CBS_se, row.CBS + 2 * row.CBS_se],
+            [y + 3 * e, y + 3 * e],
+            "-",
+            color = "grey",
+        )
+        kwds = jj == 1 ? Dict(:label => "Female childhood body size") : Dict()
+        PyPlot.plot(
+            [row.CBS, row.CBS],
+            [y + 3 * e, y + 3 * e],
+            "^",
+            color = "orange",
+            ms = ms,
+            mfc = mfc;
+            kwds...,
+        )
+
+        # Male
+        row = rslt[2*(jj-1)+2, :]
+        PyPlot.plot(
+            [row.Ht - 2 * row.Ht_se, row.Ht + 2 * row.Ht_se],
+            [y - e, y - e],
+            "-",
+            color = "grey",
+        )
+        kwds = jj == 1 ? Dict(:label => "Male adult height") : Dict()
+        PyPlot.plot(
+            [row.Ht, row.Ht],
+            [y - e, y - e],
+            "v",
+            color = "purple",
+            ms = ms,
+            mfc = mfc;
+            kwds...,
+        )
+        PyPlot.plot(
+            [row.BMI - 2 * row.BMI_se, row.BMI + 2 * row.BMI_se],
+            [y - 2 * e, y - 2 * e],
+            "-",
+            color = "grey",
+        )
+        kwds = jj == 1 ? Dict(:label => "Male adult BMI") : Dict()
+        PyPlot.plot(
+            [row.BMI, row.BMI],
+            [y - 2 * e, y - 2 * e],
+            "o",
+            color = "purple",
+            ms = ms,
+            mfc = mfc;
+            kwds...,
+        )
+        PyPlot.plot(
+            [row.CBS - 2 * row.CBS_se, row.CBS + 2 * row.CBS_se],
+            [y - 3 * e, y - 3 * e],
+            "-",
+            color = "grey",
+        )
+        kwds = jj == 1 ? Dict(:label => "Male childhood body size") : Dict()
+        PyPlot.plot(
+            [row.CBS, row.CBS],
+            [y - 3 * e, y - 3 * e],
+            "^",
+            color = "purple",
+            ms = ms,
+            mfc = mfc;
+            kwds...,
+        )
+
+        y += 1
+    end
+
+    PyPlot.axvline(0, color = "black")
+
+    ha, lb = ax.get_legend_handles_labels()
+    leg = PyPlot.figlegend(ha, lb, "upper center", ncol = 2)
+    leg.draw_frame(false)
+
+    PyPlot.xlabel("Standardized coefficient", size = 15)
+    PyPlot.savefig("writing/gee_dotplot.pdf")
 end
 
 out = open("writing/gee_regression.txt", "w")
@@ -111,3 +283,5 @@ for cbs in [:HT, :WT, :BMI, :HAZ, :WAZ, :BAZ]
 end
 
 close(out)
+
+make_dotplot()

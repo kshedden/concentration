@@ -191,7 +191,7 @@ function marginal_qf(med, xm, c, cq, gex, bw, pg)
     medcq = zeros(m, m)
     v = zeros(3)
     for i = 1:m
-        fit!(qr, pg[i]) # important tuning parameter here
+        fit!(qr, pg[i])
         for j = 1:m
             # cq is the unstandardized quantile of the exposure, gex 
             # standardizes it
@@ -234,17 +234,29 @@ function marginal_qf(med, xm, c, cq, gex, bw, pg)
     return qf
 end
 
+mutable struct MediationEffect{T<:Real}
+    # Mediation effect
+    effectmap::Matrix{T}
+
+    # Scores using remapped quantiles (+1)
+    score1::Vector{T}
+
+    # Scores using remapped quantiles (-1)
+    score2::Vector{T}
+
+    # Loadings
+    loading::Vector{T}
+end
+
 mutable struct MediationResult{T<:Real}
+    # Direct effects
+    dir::MediationEffect{T}
 
-    direct::Matrix{T}
+    # Indirect effects through first mediator
+    indir1::MediationEffect{T}
 
-    direct_score1::Vector{T}
-
-    direct_score2::Vector{T}
-
-    indirect1::Matrix{T}
-
-    indirect2::Matrix{T}
+    # Indirect effects through second mediator
+    indir2::MediationEffect{T}
 end
 
 function mediation(qrm::QModel; bw = nothing)
@@ -265,9 +277,9 @@ function mediation(qrm::QModel; bw = nothing)
     pg1 = cdf(sn, qn .- 1)
     pg2 = cdf(sn, qn .+ 1)
     scoref = LinearInterpolation(pg, u[:, 1], extrapolation_bc = Line())
-    score1 = [scoref(x) for x in pg1]
-    score2 = [scoref(x) for x in pg2]
-    de = (score2 - score1) * v[:, 1]'
+    dscore1 = [scoref(x) for x in pg1]
+    dscore2 = [scoref(x) for x in pg2]
+    de = (dscore2 - dscore1) * v[:, 1]'
 
     # Marginal quantile function of mediator 1 for perturbed populations
     # of the exposure.
@@ -284,16 +296,19 @@ function mediation(qrm::QModel; bw = nothing)
     # Indirect effect through mediator 1
     scoref1 = LinearInterpolation(pg, u[:, 2], extrapolation_bc = Line())
     qm1f = LinearInterpolation(qm1, pg, extrapolation_bc = Line())
-    q11 = [scoref1(qm1f(q1f1(p))) for p in pg]
-    q12 = [scoref1(qm1f(q1f2(p))) for p in pg]
-    ie1 = (q12 - q11) * v[:, 2]'
+    iscore11 = [scoref1(qm1f(q1f1(p))) for p in pg]
+    iscore12 = [scoref1(qm1f(q1f2(p))) for p in pg]
+    ie1 = (iscore12 - iscore11) * v[:, 2]'
 
     # Indirect effect through mediator 2
     scoref2 = LinearInterpolation(pg, u[:, 3], extrapolation_bc = Line())
     qm2f = LinearInterpolation(qm2, pg, extrapolation_bc = Line())
-    q21 = [scoref2(qm2f(q2f1(p))) for p in pg]
-    q22 = [scoref2(qm2f(q2f2(p))) for p in pg]
-    ie2 = (q22 - q21) * v[:, 3]'
+    iscore21 = [scoref2(qm2f(q2f1(p))) for p in pg]
+    iscore22 = [scoref2(qm2f(q2f2(p))) for p in pg]
+    ie2 = (iscore22 - iscore21) * v[:, 3]'
 
-    return MediationResult(de, score1, score2, ie1, ie2)
+    dir = MediationEffect(de, dscore1, dscore2, v[:, 1])
+    indir1 = MediationEffect(ie1, iscore11, iscore12, v[:, 2])
+    indir2 = MediationEffect(ie2, iscore21, iscore22, v[:, 3])
+    return MediationResult(dir, indir1, indir2)
 end
