@@ -1,4 +1,4 @@
-using Statistics, DataFrames, Statistics, Random, Latexify
+using Statistics, DataFrames, Statistics, Random, CSV
 using PyPlot, NearestNeighbors
 
 rm("plots", recursive = true, force = true)
@@ -11,8 +11,8 @@ include("nhanes_prep.jl")
 include("cancorr.jl")
 include("plot_utils.jl")
 
-function run_cca(sex, npc, nperm)
-    dx = select_nhanes(sex, 18, 40)
+function run_cca(sex, npc, nperm, minage, maxage)
+    dx = select_nhanes(sex, minage, maxage)
     y = dx[:, :BPXSY1]
     y = Vector{Float64}(y)
     xmat = dx[:, [:RIDAGEYR_z, :BMXBMI_z, :BMXHT_z]]
@@ -29,10 +29,11 @@ nperm = 100
 # Number of neighbors for local averaging
 nnb = 100
 
-function runx(sex, npc, rslt, rsltp, ifig)
+function runx(sex, npc, rslt, rsltp, minage, maxage, ifig)
 
     sexs = sex == 2 ? "Female" : "Male"
-    eta, beta, qhc, xmat, ss, sp = run_cca(sex, npc, nperm)
+    eta, beta, qhc, xmat, rss, rsp = run_cca(sex, npc, nperm, minage, maxage)
+	println(size(xmat))
 
     # Plot the quantile loading patterns
     PyPlot.clf()
@@ -41,6 +42,9 @@ function runx(sex, npc, rslt, rsltp, ifig)
     PyPlot.title(sex == 1 ? "Male" : "Female")
     PyPlot.xlabel("Probability point", size = 15)
     PyPlot.ylabel("Loading", size = 15)
+    if minimum(eta) > 0
+		PyPlot.ylim(ymin=0)
+    end
     for (j, e) in enumerate(eachcol(eta))
         PyPlot.plot(pp, e, "-", label = @sprintf("%d", j))
     end
@@ -70,7 +74,7 @@ function runx(sex, npc, rslt, rsltp, ifig)
 
         # Get the support points, sort them by increasing x coordinate.
         xp = xmat * beta
-        _, spt, sptl = make_support(xp, beta, vx, 4)
+        sp, spl, spt, sptl = make_support(xp, beta, vx, 4)
 
         # A nearest-neighbor tree for finding neighborhoods in the
         # projected X-space.
@@ -78,13 +82,17 @@ function runx(sex, npc, rslt, rsltp, ifig)
 
         # Plot the X scores against each other.  Show the support 
         # points with letters.
-        vname = ["Age", "BMI", "Height"][vx]
-        ifig = plotxx_all(sexs, vname, xp, spt, sptl, beta, ifig)
+        vnames = ["Age", "BMI", "Height"]
+        ifig = plotxx_all(sexs, vnames, vx, xp, sp, spl, 
+                          spt, sptl, beta, ifig)
 
         # Plot the quantile trajectories corresponding to each letter
         # in the previous plot.
-        rsltp1, ifig = plot_qtraj(sexs, npc, vname, spt, sptl, kt, xmat, qhc, nnb, ifig)
-        ifig = plot_qtraj_diff(sexs, npc, vname, spt, sptl, kt, xmat, qhc, nnb, ifig)
+        vname = vnames[vx]
+        rsltp1, ifig = plot_qtraj(sexs, npc, vname, spt, sptl, 
+                                  kt, xmat, qhc, nnb, ifig)
+        ifig = plot_qtraj_diff(sexs, npc, vname, sp, spl, spt, sptl, kt, 
+                               xmat, qhc, nnb, ifig)
 
         if vx == 1
             for row in rsltp1
@@ -95,36 +103,34 @@ function runx(sex, npc, rslt, rsltp, ifig)
 
     # Save the coefficient estimates and correlation values
     for (j, c) in enumerate(eachcol(beta))
-        row = [sexs, @sprintf("%d", npc), @sprintf("%d", j)]
-        for a in c
-            push!(row, @sprintf("%.2f", a))
-        end
-        push!(row, @sprintf("%.2f", ss[j]))
-        push!(row, @sprintf("%.2f", quantile(sp[j, :], 0.95)))
+        row = [sexs, npc, j]
+        push!(row, c...)
+        push!(row, rss[j])
+        push!(row, quantile(rsp[j, :], 0.95))
         push!(rslt, row)
     end
 
     return rslt, rsltp, beta, eta, ifig
 end
 
-function main(ifig)
+function submain(ifig, minage, maxage)
 
     rslt = DataFrame(
         sex = String[],
-        npc = String[],
-        c = String[],
-        Age = String[],
-        BMI = String[],
-        Height = String[],
-        R = String[],
-        Rp = String[],
+        npc = Int[],
+        c = Int[],
+        Age = Float64[],
+        BMI = Float64[],
+        Height = Float64[],
+        R = Float64[],
+        Rp = Float64[],
     )
 
     rsltp = DataFrame(
         Sex = String[],
         NPC = Int[],
         Point = String[],
-        Age = Float64[],
+        Age =Float64[],
         BMI = Float64[],
         Height = Float64[],
     )
@@ -153,7 +159,8 @@ function main(ifig)
         sexs = sex == 2 ? "Female" : "Male"
         println("sex=$(sex) $(sexs)")
         for npc in [1, 2, 3]
-            rslt, rsltp, beta, eta, ifig = runx(sex, npc, rslt, rsltp, ifig)
+            rslt, rsltp, beta, eta, ifig = runx(sex, npc, rslt, rsltp, 
+                minage, maxage, ifig)
 
             # Save these for comparison between CCA and MP-SIR
             if npc == 2
@@ -175,16 +182,28 @@ function main(ifig)
     return ifig, rslt, rsltp
 end
 
-ifig, rslt, rsltp = main(ifig)
+function main(ifig)
 
-# DEBUG leading underscore in file name
-open("writing/_nhanes_qnn_cca_table1.tex", "w") do io
-    write(io, latexify(rslt, env = :table))
+	for (minage, maxage) in [[18, 40], [18, 80]]
+
+		ifig, rslt, rsltp = submain(ifig, minage, maxage)
+
+		f = @sprintf("writing/nhanes_qnn_cca_%d_%d_table1.csv", minage, maxage)
+		open(f, "w") do io
+    		CSV.write(io, rslt)
+		end
+
+		f = @sprintf("writing/nhanes_qnn_cca_%d_%d_table2.csv", minage, maxage)
+		open(f, "w") do io
+    		CSV.write(io, rsltp)
+		end
+	end
+
+	return ifig
 end
 
-open("writing/nhanes_qnn_cca_table2.tex", "w") do io
-    write(io, latexify(rsltp, env = :table, fmt = "%.2f"))
-end
+ifig = 0
+ifig = main(ifig)
 
 f = [@sprintf("plots/%03d.pdf", j) for j = 0:ifig-1]
 c =

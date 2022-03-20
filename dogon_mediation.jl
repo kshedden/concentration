@@ -31,7 +31,7 @@ med2 = :BMI
 
 # Calipers for child and adult age
 child_age_caliper = 1.5
-adult_age_caliper = 1.5
+adult_age_caliper = 3.0
 
 # Number of quantile points to track
 m = 11
@@ -99,5 +99,5 @@ ifig = 0
 ifig = main(ifig)
 
 f = [@sprintf("plots/%03d.pdf", j) for j = 0:ifig-1]
-c = `gs -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -sOutputFile=dogon_mediation.pdf $f`
+c = `gs -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -sOutputFile=writing/dogon_mediation.pdf $f`
 run(c)
